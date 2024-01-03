@@ -1,11 +1,11 @@
 package api
 
 import (
-	"AirGo/global"
-	"AirGo/model"
-	"AirGo/service"
-	"AirGo/utils/response"
 	"github.com/gin-gonic/gin"
+	"github.com/ppoonk/AirGo/global"
+	"github.com/ppoonk/AirGo/model"
+	"github.com/ppoonk/AirGo/service"
+	"github.com/ppoonk/AirGo/utils/response"
 )
 
 // 主题配置
@@ -47,16 +47,18 @@ func GetSetting(ctx *gin.Context) {
 // 获取公共系统设置
 func GetPublicSetting(ctx *gin.Context) {
 	var ps = model.PublicSystem{
-		EnableRegister:       global.Server.System.EnableRegister,
-		EnableEmailCode:      global.Server.System.EnableEmailCode,
-		EnableLoginEmailCode: global.Server.System.EnableLoginEmailCode,
-		RebateRate:           global.Server.System.RebateRate,
-		BackendUrl:           global.Server.System.BackendUrl,
-		EnabledClockIn:       global.Server.System.EnabledClockIn,
+		EnableRegister:          global.Server.Subscribe.EnableRegister,
+		EnableEmailCode:         global.Server.Subscribe.EnableEmailCode,
+		EnableLoginEmailCode:    global.Server.Subscribe.EnableLoginEmailCode,
+		RebateRate:              global.Server.Subscribe.RebateRate,
+		BackendUrl:              global.Server.Subscribe.BackendUrl,
+		EnabledClockIn:          global.Server.Subscribe.EnabledClockIn,
+		AcceptableEmailSuffixes: global.Server.Subscribe.AcceptableEmailSuffixes,
 	}
 	response.OK("GetPublicSetting success", ps, ctx)
 }
 
+// 更新系统设置
 func UpdateSetting(ctx *gin.Context) {
 	var setting model.Server
 	err := ctx.ShouldBind(&setting)
@@ -71,5 +73,6 @@ func UpdateSetting(ctx *gin.Context) {
 		response.Fail("UpdateSetting error:"+err.Error(), nil, ctx)
 		return
 	}
+
 	response.OK("UpdateSetting success", nil, ctx)
 }

@@ -1,23 +1,22 @@
 package api
 
 import (
-	"AirGo/global"
-	"AirGo/model"
-	"AirGo/service"
-	"AirGo/utils/other_plugin"
-	"AirGo/utils/response"
 	"github.com/gin-gonic/gin"
+	"github.com/ppoonk/AirGo/global"
+	"github.com/ppoonk/AirGo/model"
+	"github.com/ppoonk/AirGo/service"
+	"github.com/ppoonk/AirGo/utils/response"
 	"strconv"
 )
 
 // 支付主逻辑
 func Purchase(ctx *gin.Context) {
-	uIDInt, ok := other_plugin.GetUserIDFromGinContext(ctx)
+	uIDInt, ok := GetUserIDFromGinContext(ctx)
 	if !ok {
 		response.Fail("Purchase error:user id error", nil, ctx)
 		return
 	}
-	// 前端传的订单信息，前端下次优化：只传订单id和支付方式id
+	// 前端传的订单信息
 	var receiveOrder model.Orders
 	err := ctx.ShouldBind(&receiveOrder)
 	if err != nil || receiveOrder.OutTradeNo == "" {
@@ -35,12 +34,11 @@ func Purchase(ctx *gin.Context) {
 	//0元购，跳过支付
 	totalAmountFloat64, _ := strconv.ParseFloat(sysOrder.TotalAmount, 10)
 	if totalAmountFloat64 == 0 {
-		sysOrder.TradeStatus = model.OrderCompleted                     //更新数据库订单状态,自定义结束状态completed
-		sysOrder.ReceiptAmount = "0"                                    //实收金额
-		sysOrder.BuyerPayAmount = "0"                                   //付款金额
-		go service.UpdateOrder(&sysOrder)                               //更新数据库状态
-		go service.UpdateUserSubscribe(&sysOrder)                       //更新用户订阅信息
-		go service.RemainHandle(sysOrder.UserID, sysOrder.RemainAmount) //处理用户余额
+		service.Show(sysOrder)
+		sysOrder.TradeStatus = model.OrderCompleted //更新数据库订单状态,自定义结束状态 Completed
+		sysOrder.ReceiptAmount = "0"                //实收金额
+		sysOrder.BuyerPayAmount = "0"               //付款金额
+		service.PaymentSuccessfullyOrderHandler(&sysOrder)
 		response.OK("Purchase success", nil, ctx)
 		return
 	}
@@ -61,7 +59,9 @@ func Purchase(ctx *gin.Context) {
 			return
 		}
 		sysOrder.TradeStatus = model.OrderWAIT_BUYER_PAY //初始订单状态：等待付款
-		go service.UpdateOrder(&sysOrder)                //更新数据库
+		global.GoroutinePool.Submit(func() {
+			service.UpdateOrder(&sysOrder) //更新数据库
+		})
 		var pcptf = model.PreCreatePayToFrontend{
 			EpayInfo: *res,
 		}
@@ -82,12 +82,16 @@ func Purchase(ctx *gin.Context) {
 			return
 		}
 		sysOrder.TradeStatus = model.OrderWAIT_BUYER_PAY //初始订单状态：等待付款
-		go service.UpdateOrder(&sysOrder)                //更新数据库
+		global.GoroutinePool.Submit(func() {
+			service.UpdateOrder(&sysOrder) //更新数据库
+		})
 		var pcptf = model.PreCreatePayToFrontend{
 			AlipayInfo: model.AlipayPreCreatePayToFrontend{QRCode: res.QRCode},
 		}
 		response.OK("alipay success:", pcptf, ctx) //返回用户qrcode
-		go service.PollAliPay(&sysOrder, client)   //5分钟等待付款，轮询
+		global.GoroutinePool.Submit(func() {
+			service.PollAliPay(&sysOrder, client) //5分钟等待付款，轮询
+		})
 	case "wechatpay":
 
 	}
@@ -145,11 +149,7 @@ func EpayNotify(ctx *gin.Context) {
 	sysOrder.ReceiptAmount = epayRes.Money  //实收金额
 	sysOrder.BuyerPayAmount = epayRes.Money //付款金额
 	sysOrder.TradeStatus = epayRes.TradeStatus
-
-	//更新数据库订单信息
-	go service.UpdateOrder(&sysOrder)
-	//更新用户订阅信息
-	go service.UpdateUserSubscribe(&sysOrder)
+	service.PaymentSuccessfullyOrderHandler(&sysOrder)
 	//返回success以表示服务器接收到了订单通知
 	ctx.String(200, "success")
 

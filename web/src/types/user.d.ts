@@ -31,6 +31,7 @@ declare interface SysUser {
         node_connector: number;
     }
 }
+
 // 登录
 declare interface LoginForm {
     user_name: string
@@ -38,6 +39,7 @@ declare interface LoginForm {
     email_code: string
     base64_captcha: Base64CaptchaInfo
 }
+
 // 注册
 declare interface RegisterForm {
     user_name: string
@@ -47,10 +49,10 @@ declare interface RegisterForm {
     email_code: string
     referrer_code: string
     base64_captcha: Base64CaptchaInfo
-
 }
+//
+declare interface Base64CaptchaInfo {
+    id: string
+    b64s: string
 
-declare interface Base64CaptchaInfo{
-        id:string;
-        b64s:string;
 }

@@ -18,6 +18,7 @@ githubApi="https://api.github.com/repos/ppoonk/AirGo/releases/latest"
 manageScript="https://raw.githubusercontent.com/ppoonk/AirGo/main/server/scripts/install.sh"
 acmeGit="https://github.com/acmesh-official/acme.sh.git"
 yamlFile="/usr/local/AirGo/config.yaml"
+ghproxy='https://mirror.ghproxy.com/'
 ipv4=""
 ipv4_local=""
 
@@ -45,8 +46,8 @@ get_region() {
     country=$( curl -4 "https://ipinfo.io/country" 2> /dev/null )
     if [ "$country" == "CN" ]; then
       acmeGit="https://gitee.com/neilpang/acme.sh.git"
-      downloadPrefix="https://gh-proxy.com/${downloadPrefix}"
-      manageScript="https://gh-proxy.com/${manageScript}"
+      downloadPrefix="${ghproxy}${downloadPrefix}"
+      manageScript="${ghproxy}${manageScript}"
     fi
 }
 open_ports(){
@@ -65,17 +66,11 @@ open_ports(){
 
 set_dependences() {
     if [[ $(command -v yum) ]]; then
-      if [[ ! $(command -v wget) ]] || [[ ! $(command -v curl) ]] || [[ ! $(command -v git) ]] || [[ ! $(command -v socat) ]] || [[ ! $(command -v unzip) ]] || [[ ! $(command -v gawk) ]] || [[ ! $(command -v lsof) ]]; then
-          echo -e ${green}"安装依赖\n"${plain}
-          yum update -y
-          yum install wget curl git socat unzip gawk lsof -y
-      fi
+        yum update -y
+        yum install wget curl git socat unzip gawk lsof -y
     elif [[ $(command -v apt) ]]; then
-      if [[ ! $(command -v wget) ]] || [[ ! $(command -v curl) ]] || [[ ! $(command -v git) ]] || [[ ! $(command -v socat) ]] || [[ ! $(command -v unzip) ]] || [[ ! $(command -v gawk) ]] || [[ ! $(command -v lsof) ]]; then
-          echo -e ${green}"安装依赖\n"${plain}
-          apt update -y
-          apt install wget curl git socat unzip gawk lsof -y
-      fi
+        apt update -y
+        apt install wget curl git socat unzip gawk lsof -y
        echo -e "依赖已安装\n"
     fi
 }
@@ -83,7 +78,7 @@ get_latest_version() {
           latestVersion=$(curl -Ls $githubApi | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
           if [[ ! -n "$latestVersion" ]]; then
               echo -e "${red}获取最新版本失败，请稍后重试${plain}"
-              exit 1
+#              exit 1
           fi
 }
 get_current_version(){
@@ -141,34 +136,28 @@ run_status() {
       temp=$(systemctl is-active $1)
       if [[ x"${temp}" == x"active" ]]; then
           return 0
-      else
-          count=$(ps -ef | grep "$1" | grep -v "grep" | wc -l)
-          if [[ count -eq 0 ]]; then
-              return 1
-          else
-              return 0
-          fi
+      else return 1
       fi
+}
+
+download_manage_scripts(){
+    wget -N --no-check-certificate -O /usr/bin/${appName} ${manageScript}
+    chmod 777 /usr/bin/${appName}
 }
 
 download(){
   echo -e "开始下载核心，版本：${latestVersion}"
   rm -rf /usr/local/${appName}
   mkdir /usr/local/${appName}
-
-  wget -N --no-check-certificate -O /usr/bin/${appName} ${manageScript}
-  chmod 777 /usr/bin/${appName}
-
-  wget -N --no-check-certificate -O /usr/local/${appName}/${appName}.zip ${downloadPrefix}${latestVersion}/${appName}-${system}-${arch}-${latestVersion}.zip
+  wget -N --no-check-certificate -O /usr/local/${appName}/${appName}.tar.gz ${downloadPrefix}${latestVersion}/${appName}-${latestVersion}-${system}-${arch}.tar.gz
   if [[ $? -ne 0 ]]; then
       echo -e "${red}下载失败，请重试${plain}"
       exit 1
   fi
   echo -e "开始解压..."
   cd /usr/local/${appName}/
-  unzip ${appName}.zip
+  tar -zxvf ${appName}.tar.gz
   chmod 777 -R /usr/local/${appName}
-  mv /usr/local/${appName}/${appName}-${system}-${arch} /usr/local/${appName}/${appName}
 
 }
 add_service(){
@@ -247,7 +236,7 @@ start(){
 
   httpPort=$(read_yaml $yamlFile "http-port")
   name=$(lsof -i:$httpPort | awk '{print $1}')
-  if [[ ! $name == ${appName} && ！$name == "" ]]; then
+  if [[ ! $name == ${appName} && ! $name == "" ]]; then
     echo -e "${red}端口被占用，请检查端口，或者修改 /usr/local/${appName}/config.yaml 配置文件${plain}"
     echo -n -e "${yellow}按回车返回主菜单: ${plain}" && read temp
     main
@@ -292,37 +281,49 @@ update(){
       return 0
   fi
   cd /usr/local/${appName}
-  echo -e "${yellow}为防止关键数据丢失，正在备份原文件夹...${plain}"
-  date=$(date +%Y_%m_%d_%H_%M)
-  zip -rq AirGo_${date}.zip /usr/local/${appName}
-  echo -e "${yellow}原文件夹已备份为：${plain}AirGo_${date}.zip"
-  echo -e "${yellow}正在下载版本：${plain}${latestVersion}"
-
-  mkdir temp
-  cd temp
-  wget -N --no-check-certificate -O ${appName}.zip ${downloadPrefix}${latestVersion}/${appName}-${system}-${arch}-${latestVersion}.zip
-  if [[ $? -ne 0 ]]; then
-      echo -e "${red}下载失败，请重试${plain}"
-      exit 1
-  fi
-  echo -e "开始解压..."
-  unzip ${appName}.zip
-  chmod 777 *
-  rm -rf /usr/local/${appName}/${appName}
-  mv ${appName}-${system}-${arch} /usr/local/${appName}/${appName}
-  chmod 777 /usr/local/${appName}
-  cd ..
-  rm -rf temp
 
   echo -e "${yellow}正在更新管理脚本...${plain}"
   rm -rf /usr/bin/${appName}
   wget -N --no-check-certificate -O /usr/bin/${appName} ${manageScript}
   chmod 777 /usr/bin/${appName}
-  confirm_msg "是否立即重启服务？" "n"
-  if [[ $? != 0 ]]; then
-      return 0
+
+#  echo -e "${yellow}为防止关键数据丢失，正在备份原文件夹...${plain}"
+#  date=$(date +%Y_%m_%d_%H_%M)
+#  zip -rq AirGo_${date}.zip /usr/local/${appName}
+#  echo -e "${yellow}原文件夹已备份为：${plain}AirGo_${date}.zip"
+
+
+  echo -e "${yellow}正在下载版本：${plain}${latestVersion}"
+
+  mkdir temp
+  cd temp
+  wget -N --no-check-certificate -O ${appName}.tar.gz ${downloadPrefix}${latestVersion}/${appName}-${latestVersion}-${system}-${arch}.tar.gz
+  if [[ $? -ne 0 ]]; then
+      echo -e "${red}下载失败，请重试${plain}"
+      exit 1
   fi
+  rm -rf /usr/local/${appName}/${appName}
+  echo -e "开始解压..."
+  tar -zxvf ${appName}.tar.gz
+  mv ${appName} /usr/local/${appName}/${appName}
+  chmod 777 /usr/local/${appName}/${appName}
+  cd ..
+  rm -rf temp
+
+#  confirm_msg "是否立即重启服务？" "n"
+#  if [[ $? != 0 ]]; then
+#      return 0
+#  fi
+
+  systemctl stop ${appName}
+
+  echo -e "${yellow}正在更新相关数据...${plain}"
+  /usr/local/${appName}/${appName} -update
+  echo -e "${yellow}完成${plain}"
+
+  echo -e "${yellow}正在重启核心...${plain}"
   systemctl restart ${appName}
+  systemctl status ${appName}
 }
 
 reset_admin(){
@@ -429,9 +430,9 @@ main(){
     installationStatus='已安装'
   fi
   run_status ${appName}
-    if [[ $? -eq 0 ]]; then
-      runStatus='已运行'
-    fi
+  if [[ $? == 0 ]]; then
+    runStatus='已运行'
+  fi
 
   echo -e "
   ${green}${appName}-panel 管理脚本${plain}
@@ -473,4 +474,5 @@ main(){
 
 }
 initialize
+download_manage_scripts
 main

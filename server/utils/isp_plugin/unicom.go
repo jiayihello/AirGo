@@ -1,12 +1,12 @@
 package isp_plugin
 
 import (
-	"AirGo/model"
-	"AirGo/utils/net_plugin"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ppoonk/AirGo/model"
+	"github.com/ppoonk/AirGo/utils/net_plugin"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -174,7 +174,6 @@ func UnicomQueryTrafficHandler(resp, mobile string) (string, error) {
 			}
 		}
 	}
-	//fmt.Println("非共享ok")
 	//共享
 	var sharedList string
 	shared, ok := respMap["resources"].([]interface{})[0].(map[string]interface{})["details"].([]interface{})

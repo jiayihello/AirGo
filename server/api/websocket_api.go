@@ -1,19 +1,18 @@
 package api
 
 import (
-	"AirGo/global"
-	"AirGo/service"
-	"AirGo/utils/other_plugin"
-	"AirGo/utils/response"
-	"AirGo/utils/websocket_plugin"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/ppoonk/AirGo/global"
+	"github.com/ppoonk/AirGo/service"
+	"github.com/ppoonk/AirGo/utils/response"
+	"github.com/ppoonk/AirGo/utils/websocket_plugin"
 	"net/http"
 	"strconv"
 	"time"
 )
 
-// websocket im 测试
+// websocket
 func WebSocketMsg(ctx *gin.Context) {
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:   1024,
@@ -26,7 +25,7 @@ func WebSocketMsg(ctx *gin.Context) {
 		//后端带token响应，否则前端接收不到数据
 		Subprotocols: []string{ctx.GetHeader("Sec-WebSocket-Protocol")},
 	}
-	uIDInt, ok := other_plugin.GetUserIDFromGinContext(ctx)
+	uIDInt, ok := GetUserIDFromGinContext(ctx)
 	if !ok {
 		response.Fail("user id error", nil, ctx)
 		return
@@ -52,6 +51,10 @@ func WebSocketMsg(ctx *gin.Context) {
 		QuitChanel:    make(chan bool),
 	}
 	global.WsManager.OnlineChannel <- client
-	go client.Read(global.WsManager, service.GetNodesStatus)
-	go client.Write(global.WsManager)
+	global.GoroutinePool.Submit(func() {
+		client.Read(global.WsManager, service.GetNodesStatus)
+	})
+	global.GoroutinePool.Submit(func() {
+		client.Write(global.WsManager)
+	})
 }

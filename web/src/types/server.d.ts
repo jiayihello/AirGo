@@ -2,12 +2,24 @@ declare interface Server {
     created_at: string;
     updated_at: string;
     id: number;
-    jwt: Jwt;
-    system: System;
-    captcha: Captcha;
-    pay: Pay;
+
+    subscribe: Subscribe;
     email: Email;
-    rate_limit_params: RateLimitParams;
+    security: Security;
+    notice: Notice;
+}
+declare interface Notice {
+    bot_token: string;
+    tg_admin: string;
+    tg_socks5 :string;
+    when_user_registered: boolean;
+    when_user_purchased: boolean;
+    when_node_offline: boolean;
+}
+declare interface Security {
+    captcha: Captcha
+    jwt: Jwt
+    rate_limit_params: RateLimitParams
 }
 
 declare interface Jwt {
@@ -17,18 +29,20 @@ declare interface Jwt {
     issuer: string;
 }
 
-declare interface System {
+declare interface Subscribe {
     enable_register: boolean;
     enable_email_code: boolean;
     enable_login_email_code: boolean;
+    acceptable_email_suffixes: string;
     is_multipoint: boolean;
 
     backend_url: string;
+    frontend_url: string;
     api_prefix: string;
 
     sub_name: string;
     tek: string;
-    default_goods: string;
+    default_goods: number;
     enabled_rebate: boolean;    //是否开启返利
     rebate_rate: number;        //返利率
     enabled_deduction: boolean; //是否开启旧套餐抵扣
@@ -37,6 +51,8 @@ declare interface System {
     enabled_clock_in: boolean
     clock_in_min_traffic: number
     clock_in_max_traffic: number
+    clock_in_min_day: number
+    clock_in_max_day: number
 }
 
 declare interface Captcha {
@@ -46,15 +62,6 @@ declare interface Captcha {
     open_captcha: number;
     open_captcha_time_out: number;
 }
-
-declare interface Pay {
-    return_url: string;
-    app_id: string;
-    private_key: string;
-    ali_public_key: string;
-    encrypt_key: string;
-}
-
 declare interface Email {
     email_from: string;
     email_from_alias: string;

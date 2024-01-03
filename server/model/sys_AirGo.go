@@ -2,7 +2,6 @@ package model
 
 import (
 	uuid "github.com/satori/go.uuid"
-	"time"
 )
 
 type AGNodeStatus struct {
@@ -18,54 +17,18 @@ type AGNodeStatusItem struct {
 	Uptime uint64
 }
 
-type AGNodeInfo struct {
-	ID             int64  `json:"id"`
-	NodeSpeedlimit int64  `json:"node_speedlimit"` //节点限速/Mbps
-	TrafficRate    int64  `json:"traffic_rate"`    //倍率
-	NodeType       string `json:"node_type"`       //节点类型 vless,vmess,trojan
-	Remarks        string `json:"remarks"`         //别名
-	Address        string `json:"address"`         //地址
-	Port           int64  `json:"port"`            //端口
-
-	//vmess参数
-	Scy       string `json:"scy"`
-	ServerKey string `json:"server_key"`
-	Aid       int64  `json:"aid"`
-	//vless参数
-	VlessFlow string `json:"flow"` //流控 none,xtls-rprx-vision,xtls-rprx-vision-udp443
-
-	//传输参数
-	Network     string `json:"network"`      //传输协议 tcp,kcp,ws,h2,quic,grpc
-	Type        string `json:"type"`         //伪装类型 ws,h2：无    tcp,kcp：none，http    quic：none，srtp，utp，wechat-video，dtls，wireguard
-	Host        string `json:"host"`         //伪装域名
-	Path        string `json:"path"`         //path
-	GrpcMode    string `json:"mode"`         //grpc传输模式 gun，multi
-	ServiceName string `json:"service_name"` //
-
-	//传输层安全
-	Security    string `json:"security"` //传输层安全类型 none,tls,reality
-	Sni         string `json:"sni"`      //
-	Fingerprint string `json:"fp"`       //
-	Alpn        string `json:"alpn"`     //
-	Dest        string `json:"dest"`
-	PrivateKey  string `json:"private_key"`
-	PublicKey   string `json:"pbk"`
-	ShortId     string `json:"sid"`
-	SpiderX     string `json:"spx"`
-	//关联
-	Access []AGAccess `json:"access" gorm:"-"` //禁用gorm查询
-}
 type AGAccess struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Route string `json:"route"`
 }
 type AGUserInfo struct {
-	ID            int64     `json:"id"`
-	UUID          uuid.UUID `json:"uuid"`
-	Passwd        string    `json:"passwd"`
-	UserName      string    `json:"user_name"`
-	NodeConnector int64     `json:"node_connector"` //连接客户端数
+	ID             int64     `json:"id"`
+	UUID           uuid.UUID `json:"uuid"`
+	Passwd         string    `json:"passwd"`
+	UserName       string    `json:"user_name"`
+	NodeConnector  int64     `json:"node_connector"` //连接客户端数
+	NodeSpeedLimit int64     `json:"node_speedLimit"`
 }
 
 type AGUserTraffic struct {
@@ -96,11 +59,7 @@ type AGREALITYx25519 struct {
 	PrivateKey string `json:"private_key"`
 }
 
-// 数据库 traffic_log 流量统计表
-type TrafficLog struct {
-	CreatedAt time.Time `json:"created_at"`
-	ID        int64     `json:"id"      gorm:"primary_key"`
-	NodeID    int64     `json:"node_id" gorm:"comment:节点ID"`
-	U         int64     `json:"u"       gorm:"comment:上行流量 bit"`
-	D         int64     `json:"d"       gorm:"comment:下行流量 bit"`
+type AGOnlineUser struct {
+	NodeID      int64
+	UserNodeMap map[int64][]string //key:uid value:node ip array
 }

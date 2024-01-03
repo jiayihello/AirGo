@@ -1,12 +1,12 @@
 package service
 
 import (
-	"AirGo/global"
-	"AirGo/model"
-	"AirGo/utils/encrypt_plugin"
-	"AirGo/utils/net_plugin"
 	"encoding/json"
 	"fmt"
+	"github.com/ppoonk/AirGo/global"
+	"github.com/ppoonk/AirGo/model"
+	"github.com/ppoonk/AirGo/utils/encrypt_plugin"
+	"github.com/ppoonk/AirGo/utils/net_plugin"
 	"github.com/smartwalle/alipay/v3"
 	"net/http"
 	"net/url"
@@ -32,9 +32,9 @@ func InitAlipayClient(pay model.Pay) (*alipay.Client, error) {
 	var cert = false
 	if cert {
 		// 使用支付宝证书
-		fmt.Println("加载证书", client.LoadAppPublicCertFromFile("appPublicCert.crt"))
+		fmt.Println("加载证书", client.LoadAppCertPublicKeyFromFile("appPublicCert.crt"))
 		fmt.Println("加载证书", client.LoadAliPayRootCertFromFile("alipayRootCert.crt"))
-		fmt.Println("加载证书", client.LoadAliPayPublicCertFromFile("alipayPublicCert.crt"))
+		fmt.Println("加载证书", client.LoadAlipayCertPublicKeyFromFile("alipayPublicCert.crt"))
 	} else {
 		// 使用支付宝公钥
 		fmt.Println("加载公钥", client.LoadAliPayPublicKey(pay.AliPay.AlipayAliPublicKey))
@@ -154,16 +154,16 @@ func PollAliPay(order *model.Orders, client *alipay.Client) {
 		rsp, _ := TradeQuery(client, order)
 		//fmt.Println("支付宝TradeQuery rsp.Content.TradeStatus:", rsp.TradeStatus)
 		if rsp.TradeStatus == "TRADE_SUCCESS" || rsp.TradeStatus == "TRADE_FINISHED" { //交易结束
-			if global.Server.System.EnabledRebate {
-				go ReferrerRebate(order.UserID, rsp.ReceiptAmount) //处理推荐人返利
+			if global.Server.Subscribe.EnabledRebate {
+				global.GoroutinePool.Submit(func() {
+					ReferrerRebate(order.UserID, rsp.ReceiptAmount) //处理推荐人返利
+				})
 			}
-			order.TradeStatus = "TRADE_SUCCESS"               //交易成功
-			order.BuyerLogonId = rsp.BuyerLogonId             //买家支付宝账号
-			order.ReceiptAmount = rsp.ReceiptAmount           //实收金额
-			order.BuyerPayAmount = rsp.BuyerPayAmount         //付款金额
-			go UpdateOrder(order)                             //更新数据库状态
-			go UpdateUserSubscribe(order)                     //更新用户订阅信息
-			go RemainHandle(order.UserID, order.RemainAmount) //处理用户余额
+			order.TradeStatus = "TRADE_SUCCESS"       //交易成功
+			order.BuyerLogonId = rsp.BuyerLogonId     //买家支付宝账号
+			order.ReceiptAmount = rsp.ReceiptAmount   //实收金额
+			order.BuyerPayAmount = rsp.BuyerPayAmount //付款金额
+			PaymentSuccessfullyOrderHandler(order)
 			t.Stop()
 			return
 		}
@@ -226,8 +226,8 @@ func EpayPreByHTML(sysOrder *model.Orders, pay *model.Pay) (*model.EpayPreCreate
 		Pid:        pay.Epay.EpayPid,
 		Type:       "", //为空则直接跳转到易支付收银台
 		OutTradeNo: sysOrder.OutTradeNo,
-		NotifyUrl:  global.Server.System.BackendUrl + "api/public/epayNotify",
-		ReturnUrl:  global.Server.System.BackendUrl + "api/public/epayNotify",
+		NotifyUrl:  global.Server.Subscribe.BackendUrl + "/api/public/epayNotify",
+		ReturnUrl:  global.Server.Subscribe.BackendUrl + "/api/public/epayNotify",
 		Name:       sysOrder.Subject,
 		Money:      sysOrder.Price,
 		//ClientIP:   "",

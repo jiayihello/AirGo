@@ -23,6 +23,32 @@
       </el-form>
     </div>
     <el-divider content-position="left">基础参数</el-divider>
+
+    <div v-if="state.noteType === 'transfer'">
+      <el-form :model="dialogData.transferInfo" label-width="100px">
+        <el-form-item label="remarks">
+          <el-input v-model="dialogData.transferInfo.remarks"/>
+        </el-form-item>
+        <el-form-item label="address">
+          <el-input v-model="dialogData.transferInfo.transfer_address"/>
+        </el-form-item>
+        <el-form-item label="port">
+          <el-input-number v-model="dialogData.transferInfo.transfer_port"/>
+        </el-form-item>
+        <el-form-item label="node">
+          <el-select v-model="dialogData.transferInfo.transfer_node_id" class="m-2" placeholder="Select">
+            <el-option
+                v-for="item in nodeManageData.nodes.node_list"
+                :key="item.id"
+                :label="item.remarks"
+                :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+
+    </div>
+
     <div v-if="state.noteType === 'vless'">
       <el-form :model="dialogData.vlessInfo" label-width="100px">
         <el-form-item label="remarks">
@@ -96,10 +122,12 @@
           <el-input v-model="dialogData.vlessInfo.service_name"/>
         </el-form-item>
 
-        <el-form-item label="host" v-if="dialogData.vlessInfo.network==='ws' || (dialogData.vlessInfo.network==='tcp' && dialogData.vlessInfo.type ==='http')">
+        <el-form-item label="host"
+                      v-if="dialogData.vlessInfo.network==='ws' || (dialogData.vlessInfo.network==='tcp' && dialogData.vlessInfo.type ==='http')">
           <el-input v-model="dialogData.vlessInfo.host"/>
         </el-form-item>
-        <el-form-item label="path" v-if="dialogData.vlessInfo.network==='ws' || (dialogData.vlessInfo.network==='tcp' && dialogData.vlessInfo.type ==='http')">
+        <el-form-item label="path"
+                      v-if="dialogData.vlessInfo.network==='ws' || (dialogData.vlessInfo.network==='tcp' && dialogData.vlessInfo.type ==='http')">
           <el-input v-model="dialogData.vlessInfo.path"/>
         </el-form-item>
         <el-form-item label="security">
@@ -162,6 +190,13 @@
         <el-form-item label="private_key" v-if="dialogData.vlessInfo.security==='reality'">
           <el-input v-model="dialogData.vlessInfo.private_key"/>
         </el-form-item>
+        <el-form-item label="allowInsecure">
+          <el-switch
+              size="small"
+              v-model="dialogData.vlessInfo.allowInsecure"
+              style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
+          />
+        </el-form-item>
         <el-divider content-position="left">其他参数</el-divider>
         <el-form :model="dialogData.vlessInfo" label-width="100px">
           <el-form-item label="是否启用">
@@ -170,12 +205,6 @@
                 v-model="dialogData.vlessInfo.enabled"
                 style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
             />
-          </el-form-item>
-          <el-form-item label="节点限速">
-            <el-input type="number" v-model.number="dialogData.vlessInfo.node_speedlimit"/>
-          </el-form-item>
-          <el-form-item label="节点倍率">
-            <el-input type="number" v-model.number="dialogData.vlessInfo.traffic_rate"/>
           </el-form-item>
           <el-form-item label="启用中转">
             <el-switch
@@ -189,6 +218,12 @@
           </el-form-item>
           <el-form-item label="中转端口" v-if="dialogData.vlessInfo.enable_transfer">
             <el-input v-model.number="dialogData.vlessInfo.transfer_port"/>
+          </el-form-item>
+          <el-form-item label="节点限速">
+            <el-input type="number" v-model.number="dialogData.vlessInfo.node_speedlimit"/>
+          </el-form-item>
+          <el-form-item label="节点倍率">
+            <el-input type="number" v-model.number="dialogData.vlessInfo.traffic_rate"/>
           </el-form-item>
           <el-form-item label="访问控制">
             <el-transfer
@@ -217,7 +252,6 @@
         <el-form-item label="port">
           <el-input v-model.number="dialogData.vmessInfo.port"/>
         </el-form-item>
-
         <el-form-item label="scy">
           <el-select
               v-model="dialogData.vmessInfo.scy"
@@ -228,7 +262,7 @@
               style="width: 100%"
           >
             <el-option
-                v-for="(v,k) in state.scyArr"
+                v-for="(v,k) in state.scyArrForVmess"
                 :key="k"
                 :label="v"
                 :value="v">
@@ -279,10 +313,12 @@
         <el-form-item label="serviceName" v-if="dialogData.vmessInfo.network==='grpc'">
           <el-input v-model="dialogData.vmessInfo.service_name"/>
         </el-form-item>
-        <el-form-item label="host" v-if="dialogData.vmessInfo.network==='ws' || (dialogData.vmessInfo.network==='tcp' && dialogData.vmessInfo.type ==='http')">
+        <el-form-item label="host"
+                      v-if="dialogData.vmessInfo.network==='ws' || (dialogData.vmessInfo.network==='tcp' && dialogData.vmessInfo.type ==='http')">
           <el-input v-model="dialogData.vmessInfo.host"/>
         </el-form-item>
-        <el-form-item label="path" v-if="dialogData.vmessInfo.network==='ws' || (dialogData.vmessInfo.network==='tcp' && dialogData.vmessInfo.type ==='http')">
+        <el-form-item label="path"
+                      v-if="dialogData.vmessInfo.network==='ws' || (dialogData.vmessInfo.network==='tcp' && dialogData.vmessInfo.type ==='http')">
           <el-input v-model="dialogData.vmessInfo.path"/>
         </el-form-item>
 
@@ -312,6 +348,13 @@
             </el-option>
           </el-select>
         </el-form-item>
+        <el-form-item label="allowInsecure">
+          <el-switch
+              size="small"
+              v-model="dialogData.vmessInfo.allowInsecure"
+              style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
+          />
+        </el-form-item>
 
         <el-divider content-position="left">其他参数</el-divider>
         <el-form :model="dialogData.vmessInfo" label-width="100px">
@@ -321,12 +364,6 @@
                 v-model="dialogData.vmessInfo.enabled"
                 style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
             />
-          </el-form-item>
-          <el-form-item label="节点限速">
-            <el-input type="number" v-model.number="dialogData.vmessInfo.node_speedlimit"/>
-          </el-form-item>
-          <el-form-item label="节点倍率">
-            <el-input type="number" v-model.number="dialogData.vmessInfo.traffic_rate"/>
           </el-form-item>
           <el-form-item label="启用中转">
             <el-switch
@@ -340,6 +377,12 @@
           </el-form-item>
           <el-form-item label="中转端口" v-if="dialogData.vmessInfo.enable_transfer">
             <el-input v-model.number="dialogData.vmessInfo.transfer_port"/>
+          </el-form-item>
+          <el-form-item label="节点限速">
+            <el-input type="number" v-model.number="dialogData.vmessInfo.node_speedlimit"/>
+          </el-form-item>
+          <el-form-item label="节点倍率">
+            <el-input type="number" v-model.number="dialogData.vmessInfo.traffic_rate"/>
           </el-form-item>
           <el-form-item label="访问控制">
             <el-transfer
@@ -378,7 +421,7 @@
               style="width: 100%"
           >
             <el-option
-                v-for="(v,k) in state.scyArr"
+                v-for="(v,k) in state.scyArrForSS"
                 :key="k"
                 :label="v"
                 :value="v">
@@ -417,12 +460,6 @@
               style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
           />
         </el-form-item>
-        <el-form-item label="节点限速">
-          <el-input type="number" v-model.number="dialogData.shadowsocksInfo.node_speedlimit"/>
-        </el-form-item>
-        <el-form-item label="节点倍率">
-          <el-input type="number" v-model.number="dialogData.shadowsocksInfo.traffic_rate"/>
-        </el-form-item>
         <el-form-item label="启用中转">
           <el-switch
               size="small"
@@ -431,16 +468,85 @@
           />
         </el-form-item>
         <el-form-item label="中转ip" v-if="dialogData.shadowsocksInfo.enable_transfer">
-          <el-input v-model="dialogData.shadowsocksInfo.transfer_address" />
+          <el-input v-model="dialogData.shadowsocksInfo.transfer_address"/>
         </el-form-item>
         <el-form-item label="中转端口" v-if="dialogData.shadowsocksInfo.enable_transfer">
           <el-input v-model.number="dialogData.shadowsocksInfo.transfer_port"/>
+        </el-form-item>
+        <el-form-item label="节点限速">
+          <el-input type="number" v-model.number="dialogData.shadowsocksInfo.node_speedlimit"/>
+        </el-form-item>
+        <el-form-item label="节点倍率">
+          <el-input type="number" v-model.number="dialogData.shadowsocksInfo.traffic_rate"/>
         </el-form-item>
         <el-form-item label="访问控制">
           <el-transfer
               :data="accessStoreData.routes_list.value.data"
               v-model="dialogData.shadowsocksInfo.access_ids"
               :right-default-checked="dialogData.shadowsocksInfo.access_ids"
+              :props="{
+                  key: 'id',
+                  label: 'name',
+                  }"
+              :titles="['全部', '选中']"
+          />
+        </el-form-item>
+      </el-form>
+    </div>
+
+    <div v-if="state.noteType === 'hysteria'">
+      <el-form :model="dialogData.hysteriaInfo" label-width="100px">
+        <el-form-item label="remarks">
+          <el-input v-model="dialogData.hysteriaInfo.remarks"/>
+        </el-form-item>
+        <el-form-item label="address">
+          <el-input v-model="dialogData.hysteriaInfo.address"/>
+        </el-form-item>
+        <el-form-item label="port">
+          <el-input v-model.number="dialogData.hysteriaInfo.port"/>
+        </el-form-item>
+        <el-form-item label="sni">
+          <el-input v-model.number="dialogData.hysteriaInfo.sni"/>
+        </el-form-item>
+        <el-form-item label="allowInsecure">
+          <el-switch
+              size="small"
+              v-model="dialogData.hysteriaInfo.allowInsecure"
+              style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
+          />
+        </el-form-item>
+        <el-divider content-position="left">其他参数</el-divider>
+        <el-form-item label="是否启用">
+          <el-switch
+              size="small"
+              v-model="dialogData.hysteriaInfo.enabled"
+              style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
+          />
+        </el-form-item>
+        <el-form-item label="启用中转">
+          <el-switch
+              size="small"
+              v-model="dialogData.hysteriaInfo.enable_transfer"
+              style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
+          />
+        </el-form-item>
+        <el-form-item label="中转ip" v-if="dialogData.hysteriaInfo.enable_transfer">
+          <el-input v-model="dialogData.hysteriaInfo.transfer_address"/>
+        </el-form-item>
+        <el-form-item label="中转端口" v-if="dialogData.hysteriaInfo.enable_transfer">
+          <el-input v-model.number="dialogData.hysteriaInfo.transfer_port"/>
+        </el-form-item>
+        <el-form-item label="节点限速">
+          <el-input-number v-model.number="dialogData.hysteriaInfo.node_speedlimit"/>
+        </el-form-item>
+        <el-form-item label="节点倍率">
+          <el-input-number v-model.number="dialogData.hysteriaInfo.traffic_rate"/>
+        </el-form-item>
+        <el-form-item label="访问控制">
+          <el-transfer
+              :data="accessStoreData.routes_list.value.data"
+              v-model="dialogData.hysteriaInfo.access_ids"
+              :right-default-checked="dialogData.hysteriaInfo.access_ids"
               :props="{
                   key: 'id',
                   label: 'name',
@@ -465,8 +571,8 @@ import {useNodeStore} from "/@/stores/nodeStore";
 import {reactive, watch} from "vue";
 import {useApiStore} from "/@/stores/apiStore";
 import {request} from "/@/utils/request";
-import {deepClone} from "/@/utils/other";
 import {useAccessStore} from "/@/stores/accessStore";
+
 const accessStore = useAccessStore()
 const accessStoreData = storeToRefs(accessStore)
 const apiStore = useApiStore()
@@ -474,13 +580,13 @@ const apiStoreData = storeToRefs(apiStore)
 
 
 const nodeStore = useNodeStore()
-const {dialogData} = storeToRefs(nodeStore)
+const {dialogData,nodeManageData} = storeToRefs(nodeStore)
 const emit = defineEmits(['refresh']);
 const state = reactive({
   title: "",
   noteType: 'vless',
   isShowDialog: false,
-  nodeTypelist: ["vless", "vmess", "shadowsocks"],
+  nodeTypelist: ["vless", "vmess", "shadowsocks", "hysteria", "transfer"],
   realityDefaultArr: [
     {dest: "www.speedtest.org:443", sni: "www.speedtest.org"},
     {dest: "www.lovelive-anime.jp:443", sni: "www.lovelive-anime.jp"},
@@ -488,7 +594,9 @@ const state = reactive({
     {dest: "blog.api.www.cloudflare.com:443", sni: "blog.api.www.cloudflare.com"},
     {dest: "www.icloud.com:443", sni: "www.icloud.com"},
   ] as RealityItem[],
-  scyArr: ["auto", "none", "chacha20-poly1305", "aes-128-gcm", "aes-256-gcm", "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305",],
+  scyArrForVmess: ["auto", "none", "aes-128-gcm", "aes-256-gcm","chacha20-ietf-poly1305",],
+  scyArrForSS: ["aes-128-gcm", "aes-256-gcm","chacha20-ietf-poly1305", "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305",],
+  scyArrForClashMeta: ["aes-128-gcm","aes-192-gcm","aes-256-gcm","chacha20-ietf-poly1305","2022-blake3-aes-128-gcm","2022-blake3-aes-256-gcm","2022-blake3-chacha20-poly1305"],
   flowArr: ["", "xtls-rprx-vision", "xtls-rprx-vision-udp443",],
   networkArr: ["ws", "tcp", "grpc",],
   typeArr1: ["none", "http"],
@@ -502,23 +610,35 @@ const openDialog = (title: string, row?: NodeInfo) => {
     dialogData.value.vlessInfo.id = 0 //编辑和添加公用一个store，清空id,否则服务器无法插入
     dialogData.value.vmessInfo.id = 0 //编辑和添加公用一个store，清空id,否则服务器无法插入
     dialogData.value.shadowsocksInfo.id = 0 //编辑和添加公用一个store，清空id,否则服务器无法插入
+    dialogData.value.hysteriaInfo.id = 0 //编辑和添加公用一个store，清空id,否则服务器无法插入
+    dialogData.value.transferInfo.id = 0 //编辑和添加公用一个store，清空id,否则服务器无法插入
     state.title = "新建节点"
     state.isShowDialog = true
   } else {
     state.title = "修改节点"
+    if (row?.enable_transfer && row?.transfer_node_id!==0){
+      state.noteType = "transfer"
+      dialogData.value.transferInfo = row
+      state.isShowDialog = true
+      return
+    }
     switch (row?.node_type) {
       case "vless":
-        state.noteType="vless"
+        state.noteType = "vless"
         dialogData.value.vlessInfo = row
-            break
+        break
       case "vmess":
-        state.noteType="vmess"
+        state.noteType = "vmess"
         dialogData.value.vmessInfo = row
-            break
+        break
       case "shadowsocks":
-        state.noteType="shadowsocks"
+        state.noteType = "shadowsocks"
         dialogData.value.shadowsocksInfo = row
-            break
+        break
+      case "hysteria":
+        state.noteType = "hysteria"
+        dialogData.value.hysteriaInfo = row
+        break
     }
     state.isShowDialog = true
   }
@@ -546,7 +666,7 @@ function onSubmit() {
 
 //
 const setReality = (nodeType: string) => {
-  request(apiStoreData.api.value.system_createx25519).then((res) => {
+  request(apiStoreData.api.value.node_createx25519).then((res) => {
     switch (nodeType) {
       case "vless":
         dialogData.value.vlessInfo.pbk = res.data.public_key

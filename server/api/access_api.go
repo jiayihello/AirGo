@@ -1,14 +1,13 @@
 package api
 
 import (
-	"AirGo/global"
-	"AirGo/model"
-	"AirGo/service"
-	"AirGo/utils/response"
 	"github.com/gin-gonic/gin"
+	"github.com/ppoonk/AirGo/global"
+	"github.com/ppoonk/AirGo/model"
+	"github.com/ppoonk/AirGo/service"
+	"github.com/ppoonk/AirGo/utils/response"
 )
 
-// 新增路由控制
 func NewRoutes(ctx *gin.Context) {
 	var acc model.Access
 	err := ctx.ShouldBind(&acc)
@@ -67,7 +66,6 @@ func DeleteRoutes(ctx *gin.Context) {
 
 // 查询路由控制列表
 func GetRoutesList(ctx *gin.Context) {
-
 	var p model.FieldParamsReq
 	err := ctx.ShouldBind(&p)
 	if err != nil {
@@ -75,7 +73,7 @@ func GetRoutesList(ctx *gin.Context) {
 		response.Fail("GetRoutesList error:"+err.Error(), nil, ctx)
 		return
 	}
-	list, total, err := service.CommonSqlFindWithFieldParamsNew(p)
+	list, total, err := service.CommonSqlFindWithFieldParams(&p)
 	if err != nil {
 		global.Logrus.Error(err.Error())
 		response.Fail("GetRoutesList error:"+err.Error(), nil, ctx)

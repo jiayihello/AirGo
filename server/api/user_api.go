@@ -1,29 +1,30 @@
 package api
 
 import (
-	"AirGo/global"
-	"AirGo/model"
-	"AirGo/service"
-	"AirGo/utils/encrypt_plugin"
-	"AirGo/utils/jwt_plugin"
-	"AirGo/utils/other_plugin"
-	timeTool "AirGo/utils/time_plugin"
 	"fmt"
+	"github.com/ppoonk/AirGo/global"
+	"github.com/ppoonk/AirGo/model"
+	"github.com/ppoonk/AirGo/service"
+	"github.com/ppoonk/AirGo/utils/encrypt_plugin"
+	"github.com/ppoonk/AirGo/utils/jwt_plugin"
+	"github.com/ppoonk/AirGo/utils/other_plugin"
+	timeTool "github.com/ppoonk/AirGo/utils/time_plugin"
 	"net/http"
+	"strings"
 	"time"
 
-	//"AirGo/utils/encrypt_plugin"
+	//"github.com/ppoonk/AirGo/utils/encrypt_plugin"
 
-	"AirGo/utils/response"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/ppoonk/AirGo/utils/response"
 	//uuid "github.com/satori/go.uuid"
 	uuid "github.com/satori/go.uuid"
 )
 
 // 用户注册
 func Register(ctx *gin.Context) {
-	if !global.Server.System.EnableRegister {
+	if !global.Server.Subscribe.EnableRegister {
 		response.Fail("Registration closed", nil, ctx)
 		return
 	}
@@ -34,14 +35,20 @@ func Register(ctx *gin.Context) {
 		response.Fail("Register error:"+err.Error(), nil, ctx)
 		return
 	}
+	//判断邮箱后缀
+	ok := other_plugin.In(u.EmailSuffix, strings.Fields(global.Server.Subscribe.AcceptableEmailSuffixes))
+	if !ok {
+		response.Fail("The suffix name of this email is not supported!", nil, ctx)
+	}
 	//处理base64Captcha
 	if !global.Base64CaptchaStore.Verify(u.Base64Captcha.ID, u.Base64Captcha.B64s, true) {
-		response.Fail("Verification code error", nil, ctx) //验证错校验失败会清除store中的value，需要前端重新获取
+		response.Fail("Verification code error,Please refresh the page and try again!", nil, ctx) //验证错校验失败会清除store中的value，需要前端重新获取
 		return
 	}
 	//校验邮箱验证码
-	if global.Server.System.EnableEmailCode {
-		cacheEmail, ok := global.LocalCache.Get(u.UserName + "emailcode")
+	userEmail := u.UserName + u.EmailSuffix //处理邮箱后缀
+	if global.Server.Subscribe.EnableEmailCode {
+		cacheEmail, ok := global.LocalCache.Get(userEmail + "emailcode")
 		if ok {
 			if cacheEmail != u.EmailCode {
 				response.Fail("Email verification code verification error", nil, ctx)
@@ -53,18 +60,25 @@ func Register(ctx *gin.Context) {
 			return
 		}
 	}
-	//处理邮箱后缀
+	global.LocalCache.Delete(userEmail + "emailcode")
+
+	//初步构建用户信息
+	var avatar string
+	if u.EmailSuffix == "@qq" {
+		avatar = fmt.Sprintf("https://q1.qlogo.cn/g?b=qq&nk=%s&s=100", u.UserName)
+	}
 	err = service.Register(&model.User{
-		UserName:     u.UserName + u.EmailSuffix,
+		UserName:     userEmail,
 		Password:     u.Password,
 		ReferrerCode: u.ReferrerCode,
+		Avatar:       avatar,
 	})
 	if err != nil {
 		global.Logrus.Error(err.Error())
 		response.Fail("Register error:"+err.Error(), nil, ctx)
 		return
 	}
-	global.LocalCache.Delete(u.UserName + "emailcode")
+	global.LocalCache.Delete(userEmail + "emailcode")
 	response.OK("Register success", nil, ctx)
 }
 
@@ -80,7 +94,7 @@ func Login(c *gin.Context) {
 		return
 	}
 	//校验邮箱验证码
-	if global.Server.System.EnableLoginEmailCode {
+	if global.Server.Subscribe.EnableLoginEmailCode {
 		cacheEmail, ok := global.LocalCache.Get(l.UserName + "emailcode")
 		global.LocalCache.Delete(l.UserName + "emailcode")
 		if ok {
@@ -104,28 +118,28 @@ func Login(c *gin.Context) {
 	//登录以后签发jwt，先查询是否有token缓存
 	var token string
 	cacheToken, ok := global.LocalCache.Get(l.UserName + "token")
-	if ok {
+	if ok && cacheToken != "" {
 		token = cacheToken.(string)
 	} else {
 		myCustomClaimsPrefix := jwt_plugin.MyCustomClaimsPrefix{
 			UserID:   user.ID,
 			UserName: user.UserName,
 		}
-		ep, _ := timeTool.ParseDuration(global.Server.JWT.ExpiresTime)
+		ep, _ := timeTool.ParseDuration(global.Server.Security.JWT.ExpiresTime)
 		registeredClaims := jwt.RegisteredClaims{
-			Issuer:    global.Server.JWT.Issuer,               // 签发者
+			Issuer:    global.Server.Security.JWT.Issuer,      // 签发者
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ep)), //过期时间
 			NotBefore: jwt.NewNumericDate(time.Now()),         //生效时间
 		}
-		tokenNew, err := jwt_plugin.GenerateTokenUsingHs256(myCustomClaimsPrefix, registeredClaims, global.Server.JWT.SigningKey)
+		tokenNew, err := jwt_plugin.GenerateTokenUsingHs256(myCustomClaimsPrefix, registeredClaims, global.Server.Security.JWT.SigningKey)
 		if err != nil {
 			global.Logrus.Error(err.Error())
 			return
 		} else {
 			token = tokenNew
-			go func(l *model.UserLogin, token string) {
+			global.GoroutinePool.Submit(func() {
 				global.LocalCache.Set(l.UserName+"token", token, ep)
-			}(&l, token)
+			})
 		}
 	}
 	response.OK("Login success", gin.H{
@@ -136,7 +150,7 @@ func Login(c *gin.Context) {
 
 // 修改混淆
 func ChangeSubHost(ctx *gin.Context) {
-	uIDInt, ok := other_plugin.GetUserIDFromGinContext(ctx)
+	uIDInt, ok := GetUserIDFromGinContext(ctx)
 	if !ok {
 		response.Fail("user id error", nil, ctx)
 		return
@@ -159,24 +173,23 @@ func ChangeSubHost(ctx *gin.Context) {
 
 // 获取自身信息
 func GetUserInfo(ctx *gin.Context) {
-	uIDInt, ok := other_plugin.GetUserIDFromGinContext(ctx)
+	uIDInt, ok := GetUserIDFromGinContext(ctx)
 	if !ok {
 		response.Fail("user id error", nil, ctx)
 		return
 	}
-	u, err := service.GetUserInfo(uIDInt)
+	user, err := service.FindUserByID(uIDInt)
 	if err != nil {
 		global.Logrus.Error(err.Error())
 		response.Fail("GetUserInfo error:"+err.Error(), nil, ctx)
 		return
 	}
-	response.OK("GetUserInfo success", u, ctx)
-
+	response.OK("GetUserInfo success", user, ctx)
 }
 
 // 获取用户列表
 func GetUserlist(ctx *gin.Context) {
-	var params model.PaginationParams
+	var params model.FieldParamsReq
 	err := ctx.ShouldBind(&params)
 	if err != nil {
 		global.Logrus.Error(err.Error())
@@ -245,13 +258,6 @@ func DeleteUser(ctx *gin.Context) {
 		response.Fail("DeleteUser error:"+err.Error(), err.Error(), ctx)
 		return
 	}
-	//删除用户关联的角色
-	service.DeleteUserRoleGroup(&u)
-	if err != nil {
-		global.Logrus.Error(err)
-		response.Fail("DeleteUser error:"+err.Error(), nil, ctx)
-		return
-	}
 	// 删除用户
 	err = service.DeleteUser(&u)
 	if err != nil {
@@ -260,12 +266,11 @@ func DeleteUser(ctx *gin.Context) {
 		return
 	}
 	response.OK("DeleteUser success", nil, ctx)
-
 }
 
 // 修改密码
 func ChangeUserPassword(ctx *gin.Context) {
-	uIDInt, ok := other_plugin.GetUserIDFromGinContext(ctx)
+	uIDInt, ok := GetUserIDFromGinContext(ctx)
 	if !ok {
 		response.Fail("user id error", nil, ctx)
 		return
@@ -300,6 +305,12 @@ func ResetUserPassword(ctx *gin.Context) {
 		response.Fail("ResetUserPassword error:"+err.Error(), nil, ctx)
 		return
 	}
+	//判断邮箱后缀
+	ok := other_plugin.In(u.UserName[strings.Index(u.UserName, "@"):], strings.Fields(global.Server.Subscribe.AcceptableEmailSuffixes))
+	if !ok {
+		response.Fail("The suffix name of this email is not supported!", nil, ctx)
+	}
+
 	//校验邮箱验证码
 	emailcode, _ := global.LocalCache.Get(u.UserName + "emailcode")
 	if emailcode != u.EmailCode {
@@ -322,11 +333,59 @@ func ResetUserPassword(ctx *gin.Context) {
 
 // 获取订阅
 func GetSub(ctx *gin.Context) {
-	//订阅参数
-	link := ctx.Query("link")
-	subType := ctx.Query("type")
+	//Shadowrocket/2070 CFNetwork/1325.0.1 Darwin/21.1.0
+	//ClashMetaForAndroid/2.8.9.Meta
+	//ClashX/1.118.0 (com.west2online.ClashX; build:1.118.0; macOS 10.15.7) Alamofire/5.8.0
+	//Quantumult/627 CFNetwork/1325.0.1 Darwin/21.1.0
+	//NekoBox/Android/1.2.9 (Prefer ClashMeta Format)
+	//v2rayNG/1.8.9
+	//V2rayU/4.0.0 CFNetwork/1128.0.1 Darwin/19.6.0 (x86_64)
+	//v2rayN/6.30
 
-	res := service.GetUserSub(link, subType)
+	clientType := ""
+	ua := ctx.Request.Header.Get("User-Agent")
+	if strings.HasPrefix(ua, "NekoBox") {
+		clientType = "NekoBox"
+		goto next
+	}
+	if strings.HasPrefix(ua, "v2rayNG") {
+		clientType = "v2rayNG"
+		goto next
+	}
+	if strings.HasPrefix(ua, "v2rayN") {
+		clientType = "v2rayN"
+		goto next
+	}
+	if strings.HasPrefix(ua, "Clash") {
+		clientType = "Clash"
+		goto next
+	}
+	if strings.HasPrefix(ua, "Shadowrocket") {
+		clientType = "Shadowrocket"
+		goto next
+	}
+	if strings.HasPrefix(ua, "Surge") {
+		clientType = "Surge"
+		goto next
+	}
+	if strings.HasPrefix(ua, "Quantumult") {
+		clientType = "Quantumult"
+		goto next
+	}
+	if strings.HasPrefix(ua, "V2rayU") {
+		clientType = "V2rayU"
+		goto next
+	}
+	if clientType == "" {
+		clientType = ctx.Query("type")
+	}
+	if clientType == "" {
+		clientType = "NekoBox"
+	}
+
+next:
+	link := ctx.Query("link")
+	res := service.GetUserSubNew(link, clientType)
 	if res == "" {
 		return
 	}
@@ -336,7 +395,7 @@ func GetSub(ctx *gin.Context) {
 
 // 重置订阅
 func ResetSub(ctx *gin.Context) {
-	uIDInt, ok := other_plugin.GetUserIDFromGinContext(ctx)
+	uIDInt, ok := GetUserIDFromGinContext(ctx)
 	if !ok {
 		response.Fail("user id error", nil, ctx)
 		return
@@ -357,7 +416,7 @@ func ResetSub(ctx *gin.Context) {
 
 // 打卡
 func ClockIn(ctx *gin.Context) {
-	uIDInt, ok := other_plugin.GetUserIDFromGinContext(ctx)
+	uIDInt, ok := GetUserIDFromGinContext(ctx)
 	if !ok {
 		response.Fail("user id error", nil, ctx)
 		return
@@ -369,7 +428,7 @@ func ClockIn(ctx *gin.Context) {
 		return
 	}
 
-	msg, err := service.ClockIn(uIDInt)
+	t, day, err := service.ClockIn(uIDInt)
 	if err != nil {
 		global.Logrus.Error(err)
 		response.Fail("ClockIn error:"+err.Error(), nil, ctx)
@@ -378,5 +437,45 @@ func ClockIn(ctx *gin.Context) {
 	now := time.Now()
 	zeroTime := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
 	global.LocalCache.Set(fmt.Sprintf("%d", uIDInt)+"clockin", nil, zeroTime.Sub(now))
-	response.OK("ClockIn success", msg, ctx)
+	response.OK("ClockIn success", fmt.Sprintf("day: +%d，flow：+%dMB", day, t), ctx)
+}
+
+// 查询流量记录
+func GetUserTraffic(ctx *gin.Context) {
+	var params model.FieldParamsReq
+	err := ctx.ShouldBind(&params)
+	if err != nil {
+		response.Fail("GetUserTicketList error:"+err.Error(), nil, ctx)
+		return
+	}
+	uID, _ := GetUserIDFromGinContext(ctx)
+	params.FieldParamsList = append(params.FieldParamsList, model.FieldParamsItem{
+		Operator:       "AND",
+		Field:          "user_id",
+		FieldType:      "",
+		Condition:      "=",
+		ConditionValue: fmt.Sprintf("%d", uID),
+	})
+	traffic, err := service.GetUserTraffic(&params)
+	if err != nil {
+		response.Fail("GetUserTraffic error:"+err.Error(), nil, ctx)
+		return
+	}
+	response.OK("GetUserTraffic success", traffic, ctx)
+}
+
+// 查询流量记录
+func GetAllUserTraffic(ctx *gin.Context) {
+	var params model.FieldParamsReq
+	err := ctx.ShouldBind(&params)
+	if err != nil {
+		response.Fail("GetAllUserTraffic error:"+err.Error(), nil, ctx)
+		return
+	}
+	res, err := service.GetAllUserTraffic(&params)
+	if err != nil {
+		response.Fail("GetAllUserTraffic error:"+err.Error(), nil, ctx)
+		return
+	}
+	response.OK("GetAllUserTraffic success", res, ctx)
 }

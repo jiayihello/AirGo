@@ -1,10 +1,10 @@
 package service
 
 import (
-	"AirGo/global"
-	"AirGo/model"
-	"AirGo/utils/format_plugin"
 	"errors"
+	"github.com/ppoonk/AirGo/global"
+	"github.com/ppoonk/AirGo/model"
+	"github.com/ppoonk/AirGo/utils/other_plugin"
 	"gorm.io/gorm"
 )
 
@@ -28,7 +28,7 @@ func GetRouteIdsByRoleIds(roleIds []int64) ([]int64, error) {
 		routeIds = append(routeIds, RoleAndMenuArr[item].DynamicRouteID)
 	}
 	//过滤重复
-	routeIdsNew := format_plugin.ArrayDeduplication(routeIds)
+	routeIdsNew := other_plugin.ArrayDeduplication(routeIds)
 	return routeIdsNew, nil
 
 }
@@ -115,7 +115,7 @@ func getChildrenRouteNodeTree(routeNode *model.RouteNode, routeNodeMap map[int64
 // 查询动态路由是否存在 by path
 func NotExistDynamicRoute(route *model.DynamicRoute) bool {
 	var dr model.DynamicRoute
-	err := global.DB.Where(&model.DynamicRoute{Path: route.Path}).First(&dr).Error //注意Model Where 的区别
+	err := global.DB.Where(&model.DynamicRoute{Path: route.Path}).First(&dr).Error
 	return errors.Is(err, gorm.ErrRecordNotFound)
 }
 

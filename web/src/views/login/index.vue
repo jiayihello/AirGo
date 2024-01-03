@@ -16,18 +16,22 @@
     </div>
     <div class="login-right flex">
       <div class="login-right-warp flex-margin">
-        <span class="login-right-warp-one"></span>
-        <span class="login-right-warp-two"></span>
         <div class="login-right-warp-mian">
-          <div class="login-right-warp-main-title">{{ getThemeConfig.globalTitle }}</div>
+          <div class="login-right-warp-main-title">
+            <div>
+              <div>{{ getThemeConfig.globalTitle }}</div>
+            </div>
+
+          </div>
+
           <div class="login-right-warp-main-form">
             <div v-if="!state.isScan">
               <el-tabs v-model="state.tabsActiveName">
-                <el-tab-pane label="登录" name="account">
+                <el-tab-pane label="登录" name="login">
                   <Account/>
                 </el-tab-pane>
-                <el-tab-pane label="注册" name="mobile">
-                  <Register/>
+                <el-tab-pane label="注册" name="register">
+                  <Register ref="RegisterRef" @toLogin="toLogin"/>
                 </el-tab-pane>
               </el-tabs>
             </div>
@@ -46,7 +50,7 @@
 </template>
 
 <script setup lang="ts" name="loginIndex">
-import {computed, defineAsyncComponent, onMounted, reactive} from 'vue';
+import {computed, defineAsyncComponent, onMounted, reactive,ref} from 'vue';
 import {storeToRefs} from 'pinia';
 
 
@@ -60,6 +64,7 @@ import {Local} from "/@/utils/storage";
 // 引入组件
 const Account = defineAsyncComponent(() => import('/@/views/login/component/account.vue'));
 const Register = defineAsyncComponent(() => import('/@/views/login/component/register.vue'));
+const RegisterRef = ref()
 const Scan = defineAsyncComponent(() => import('/@/views/login/component/scan.vue'));
 const LayoutFooter = defineAsyncComponent(() => import('/@/layout/footer/index.vue'));
 
@@ -68,7 +73,7 @@ const LayoutFooter = defineAsyncComponent(() => import('/@/layout/footer/index.v
 const storesThemeConfig = useThemeConfig();
 const {themeConfig} = storeToRefs(storesThemeConfig);
 const state = reactive({
-  tabsActiveName: 'account',
+  tabsActiveName: 'login',
   isScan: false,
 });
 
@@ -81,11 +86,18 @@ const route = useRoute();
 const isFooter = computed(() => {
   return themeConfig.value.isFooter && !route.meta.isIframe;
 });
+// 去登录
+const toLogin = () => {
+  state.tabsActiveName = "login"
+}
 
 // 页面加载时
 onMounted(() => {
-  // console.log("route.query",  route.query.i)
-  Local.set('invitation', route.query.i)
+  let i = ''
+  if (route.query.i !== undefined){
+    i = route.query.i as string
+  }
+  Local.set('invitation', i)
   NextLoading.done();
 });
 </script>
@@ -118,16 +130,17 @@ onMounted(() => {
       .login-left-logo-text {
         display: flex;
         flex-direction: column;
+        width: 400px;
 
         span {
           margin-left: 10px;
           font-size: 28px;
-          color: #ffffff; //标题颜色
+          color: #000000; //标题颜色
         }
 
         .login-left-logo-text-msg {
           font-size: 12px;
-          color: #ffffff; //副标题颜色
+          color: rgba(134, 109, 109, 0.99); //副标题颜色
         }
       }
     }
@@ -167,76 +180,15 @@ onMounted(() => {
       overflow: hidden;
       background-color: var(--el-color-white);
 
-      .login-right-warp-one,
-      .login-right-warp-two {
-        position: absolute;
-        display: block;
-        width: inherit;
-        height: inherit;
-
-        &::before,
-        &::after {
-          content: '';
-          position: absolute;
-          z-index: 1;
-        }
-      }
-
-      .login-right-warp-one {
-        &::before {
-          filter: hue-rotate(0deg);
-          top: 0px;
-          left: 0;
-          width: 100%;
-          height: 5px;
-          background: linear-gradient(90deg, transparent, var(--el-color-primary));
-          animation: loginLeft 3s linear infinite;
-        }
-
-        &::after {
-          filter: hue-rotate(60deg);
-          top: -100%;
-          right: 2px;
-          width: 5px;
-          height: 100%;
-          background: linear-gradient(180deg, transparent, var(--el-color-primary));
-          animation: loginTop 3s linear infinite;
-          animation-delay: 0.7s;
-        }
-      }
-
-      .login-right-warp-two {
-        &::before {
-          filter: hue-rotate(120deg);
-          bottom: 2px;
-          right: -100%;
-          width: 100%;
-          height: 5px;
-          background: linear-gradient(270deg, transparent, var(--el-color-primary));
-          animation: loginRight 3s linear infinite;
-          animation-delay: 1.4s;
-        }
-
-        &::after {
-          filter: hue-rotate(300deg);
-          bottom: -100%;
-          left: 0px;
-          width: 5px;
-          height: 100%;
-          background: linear-gradient(360deg, transparent, var(--el-color-primary));
-          animation: loginBottom 3s linear infinite;
-          animation-delay: 2.1s;
-        }
-      }
-
       .login-right-warp-mian {
         display: flex;
         flex-direction: column;
         height: 100%;
 
         .login-right-warp-main-title {
-          height: 100px;
-          line-height: 100px;
+          height: 80px;
+          line-height: 80px;
+          margin-top: 0px;
           font-size: 27px;
           text-align: center;
           letter-spacing: 3px;
@@ -299,11 +251,4 @@ onMounted(() => {
   top: 98%;
   transform: translate(-50%, -50%); /* 50%为自身尺寸的一半 */
 }
-
-//.muyu {
-//  position: absolute;
-//  left: 50%;
-//  top: 90%;
-//  transform: translate(-50%, -50%); /* 50%为自身尺寸的一半 */
-//}
 </style>

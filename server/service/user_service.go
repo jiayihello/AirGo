@@ -1,8 +1,8 @@
 package service
 
 import (
-	"AirGo/global"
 	"fmt"
+	"github.com/ppoonk/AirGo/global"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"os"
@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"AirGo/model"
-	encrypt_plugin "AirGo/utils/encrypt_plugin"
 	"errors"
+	"github.com/ppoonk/AirGo/model"
+	encrypt_plugin "github.com/ppoonk/AirGo/utils/encrypt_plugin"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -28,10 +28,20 @@ func Register(u *model.User) error {
 			UUID:           uuid.NewV4(),
 			UserName:       u.UserName,
 			NickName:       u.UserName,
-			Password:       encrypt_plugin.BcryptEncode(u.Password),
-			RoleGroup:      []model.Role{{ID: 2}}, //默认角色,普通用户
-			InvitationCode: encrypt_plugin.RandomString(8),
-			ReferrerCode:   u.ReferrerCode,
+			Avatar:         u.Avatar,                                //头像
+			Password:       encrypt_plugin.BcryptEncode(u.Password), //密码
+			RoleGroup:      []model.Role{{ID: 2}},                   //默认角色：普通用户角色
+			InvitationCode: encrypt_plugin.RandomString(8),          //邀请码
+			ReferrerCode:   u.ReferrerCode,                          //推荐人
+			SubscribeInfo: model.SubscribeInfo{
+				SubscribeUrl: encrypt_plugin.RandomString(8), //随机字符串订阅url
+			},
+		}
+		//通知
+		if global.Server.Notice.WhenUserRegistered {
+			global.GoroutinePool.Submit(func() {
+				UnifiedPushMessage("新注册用户：" + newUser.UserName)
+			})
 		}
 		return CreateUser(NewUserSubscribe(&newUser))
 	} else {
@@ -67,11 +77,11 @@ func NewUser(u model.User) error {
 // 新注册用户分配套餐
 func NewUserSubscribe(u *model.User) *model.User {
 	//查询商品信息
-	if global.Server.System.DefaultGoods == "" {
+	if global.Server.Subscribe.DefaultGoods == 0 {
 		return u
 	}
 	var goods = model.Goods{
-		Subject: global.Server.System.DefaultGoods,
+		ID: global.Server.Subscribe.DefaultGoods,
 	}
 	//查询默认套餐
 	g, _, err := CommonSqlFind[model.Goods, model.Goods, model.Goods](goods)
@@ -106,6 +116,18 @@ func FindUserByID(id int64) (*model.User, error) {
 	return &u, err
 }
 
+// 查用户 by tg_id
+func FindUserByTgID(tgID int64) (*model.User, error) {
+	var u model.User
+	err := global.DB.Where("tg_id = ?", tgID).First(&u).Error
+	return &u, err
+}
+func FindUserByUserName(userName string) (*model.User, error) {
+	var u model.User
+	err := global.DB.Where("user_name = ?", userName).First(&u).Error
+	return &u, err
+}
+
 // 更新用户订阅信息
 func UpdateUserSubscribe(order *model.Orders) error {
 	//查询商品信息
@@ -120,27 +142,28 @@ func UpdateUserSubscribe(order *model.Orders) error {
 
 // 处理用户订阅信息
 func HandleUserSubscribe(u *model.User, goods *model.Goods) *model.User {
-
 	u.SubscribeInfo.GoodsID = goods.ID           //当前订购的套餐
 	u.SubscribeInfo.GoodsSubject = goods.Subject //套餐标题
 	u.SubscribeInfo.SubStatus = true             //订阅状态
-	t := time.Now().AddDate(0, 0, int(goods.ExpirationDate))
-	u.SubscribeInfo.ExpiredAt = &t //过期时间
-	if goods.NodeConnector != 0 {
-		u.SubscribeInfo.NodeConnector = goods.NodeConnector //连接客户端数
-	}
 	if u.SubscribeInfo.SubscribeUrl == "" {
 		u.SubscribeInfo.SubscribeUrl = encrypt_plugin.RandomString(8) //随机字符串订阅url
 	}
-	switch goods.TrafficResetMethod {
+	if goods.NodeConnector != 0 {
+		u.SubscribeInfo.NodeConnector = goods.NodeConnector //连接客户端数
+	}
+	switch goods.TrafficResetMethod { //判断是否叠加
 	case "Stack":
 		u.SubscribeInfo.T = u.SubscribeInfo.T + goods.TotalBandwidth*1024*1024*1024 // GB->MB->KB->B
+		t := u.SubscribeInfo.ExpiredAt.AddDate(0, 0, int(goods.ExpirationDate))
+		u.SubscribeInfo.ExpiredAt = &t //过期时间
 	default:
 		u.SubscribeInfo.T = goods.TotalBandwidth * 1024 * 1024 * 1024 // GB->MB->KB->B
 		u.SubscribeInfo.U = 0
 		u.SubscribeInfo.D = 0
+		t := time.Now().AddDate(0, 0, int(goods.ExpirationDate))
+		u.SubscribeInfo.ExpiredAt = &t //过期时间
 	}
-
+	u.SubscribeInfo.ResetDay = goods.ResetDay //流量重置日
 	return u
 }
 
@@ -161,11 +184,55 @@ func UpdateUserTrafficInfo(userArr []model.User, userIds []int64) error {
 	}).Create(&userArrQuery).Error
 
 }
+func UpdateUserTrafficLog(UserTrafficLogMap map[int64]model.UserTrafficLog, userIds []int64) error {
+	var query []model.UserTrafficLog
+	now := time.Now()
+	//当日0点
+	todayZero := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	err := global.DB.Where("created_at > ? AND user_id IN ?", todayZero, userIds).Find(&query).Error
+	if err != nil {
+		return err
+	}
+	for k, _ := range query {
+		if tl, ok := UserTrafficLogMap[query[k].UserID]; ok { //已存在，叠加流量
+			query[k].U += tl.U
+			query[k].D += tl.D
+			delete(UserTrafficLogMap, query[k].UserID) //删除
+		}
+	}
+	//不存在的数据，追加到最后面，一起插入数据库
+	if len(UserTrafficLogMap) > 0 {
+		for k, _ := range UserTrafficLogMap {
+			query = append(query, UserTrafficLogMap[k])
+		}
+	}
+	if len(query) == 0 {
+		return nil
+	}
+	return global.DB.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"u", "d"}),
+	}).Create(&query).Error
+
+}
 
 // 用户流量，有效期 检测任务
 func UserExpiryCheck() error {
-	//fmt.Println("开始用户流量，有效期 检测任务")
-	return global.DB.Exec("update user set sub_status = 0 where expired_at < ? or ( u + d ) > t", time.Now()).Error
+	err := global.DB.Exec("UPDATE user SET sub_status = 0 WHERE expired_at < ? or ( u + d ) > t", time.Now()).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// 用户流量重置任务
+func UserTrafficReset() error {
+	day := time.Now().Day()
+	err := global.DB.Exec("UPDATE user SET u = 0, d = 0 WHERE reset_day = ?", day).Error
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // 修改混淆
@@ -176,22 +243,19 @@ func ChangeSubHost(uID int64, host string) error {
 	return global.DB.Model(&model.User{ID: uID}).Updates(u).Error
 }
 
-// 获取自身信息
-func GetUserInfo(uID int64) (*model.User, error) {
-	var user model.User
-	return &user, global.DB.First(&user, uID).Error
-}
-
-// 获取用户列表,分页
-func GetUserlist(params *model.PaginationParams) (*model.UsersWithTotal, error) {
-	var userArr model.UsersWithTotal
-	var err error
-	if params.Search != "" {
-		err = global.DB.Model(&model.User{}).Where("user_name like ?", ("%" + params.Search + "%")).Count(&userArr.Total).Limit(int(params.PageSize)).Offset((int(params.PageNum) - 1) * int(params.PageSize)).Preload("RoleGroup").Find(&userArr.UserList).Error
-	} else {
-		err = global.DB.Model(&model.User{}).Count(&userArr.Total).Limit(int(params.PageSize)).Offset((int(params.PageNum) - 1) * int(params.PageSize)).Preload("RoleGroup").Find(&userArr.UserList).Error
+// 获取用户列表
+func GetUserlist(params *model.FieldParamsReq) (*model.CommonDataResp, error) {
+	var data model.CommonDataResp
+	var userList []model.User
+	_, dataSql := CommonSqlFindSqlHandler(params)
+	dataSql = dataSql[strings.Index(dataSql, "WHERE ")+6:]
+	err := global.DB.Model(&model.User{}).Count(&data.Total).Where(dataSql).Preload("RoleGroup").Find(&userList).Error
+	if err != nil {
+		global.Logrus.Error("GetUserlist error:", err.Error())
+		return nil, err
 	}
-	return &userArr, err
+	data.Data = userList
+	return &data, nil
 }
 
 // 更新用户信息
@@ -217,6 +281,17 @@ func CreateUser(u *model.User) error {
 
 // 删除用户
 func DeleteUser(u *model.User) error {
+	//删除关联的角色组
+	err := DeleteUserRoleGroup(u)
+	if err != nil {
+		return err
+	}
+	//删除关联的订单
+	err = DeleteUserAllOrder(u)
+	if err != nil {
+		return err
+	}
+	//删除用户
 	return global.DB.Delete(&u).Error
 }
 
@@ -276,36 +351,114 @@ func ReferrerRebate(uID int64, receiptAmount string) {
 		return //推荐人不存在
 	}
 	a, _ := strconv.ParseFloat(receiptAmount, 64)
-	referrerUser.Remain = referrerUser.Remain + a*global.Server.System.RebateRate
+	referrerUser.Remain = referrerUser.Remain + a*global.Server.Subscribe.RebateRate
 	SaveUser(&referrerUser)
 }
 
 // 处理用户余额
-func RemainHandle(uid int64, remain string) {
+func RemainHandle(uid int64, remain string) error {
 	remainFloat64, _ := strconv.ParseFloat(remain, 64)
 	if remainFloat64 == 0 {
-		return
+		return nil
 	}
-	user, _ := FindUserByID(uid)
+	user, err := FindUserByID(uid)
+	if err != nil {
+		return err
+	}
 	user.Remain = user.Remain - remainFloat64
-	SaveUser(user)
+	return SaveUser(user)
+}
+
+// 处理用户充值卡商品
+func RechargeHandle(order *model.Orders) error {
+	Show(order)
+	//查询商品信息
+	goods, _ := FindGoodsByGoodsID(order.GoodsID)
+	Show(goods)
+	orderRemainAmount, _ := strconv.ParseFloat(order.RemainAmount, 64)
+	rechargeFloat64, _ := strconv.ParseFloat(goods.RechargeAmount, 64)
+	user, err := FindUserByID(order.UserID)
+	if err != nil {
+		return err
+	}
+	user.Remain = user.Remain - orderRemainAmount + rechargeFloat64
+	if user.Remain < 0 {
+		user.Remain = 0
+	}
+	Show(order)
+	return SaveUser(user)
 }
 
 // 打卡
-func ClockIn(uID int64) (int, error) {
+func ClockIn(uID int64) (int, int, error) {
 	//查询用户信息
-	user, err := GetUserInfo(uID)
+	user, err := FindUserByID(uID)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	//判断订阅是否有效
 	if !user.SubscribeInfo.SubStatus {
-		return 0, errors.New("subscribe is expired")
+		return 0, 0, errors.New("subscribe is expired")
 	}
-	//随机
-	t := encrypt_plugin.RandomNumber(int(global.Server.System.ClockInMinTraffic), int(global.Server.System.ClockInMaxTraffic)) //MB
+	//随机流量
+	t := encrypt_plugin.RandomNumber(int(global.Server.Subscribe.ClockInMinTraffic), int(global.Server.Subscribe.ClockInMaxTraffic)) //MB
 	user.SubscribeInfo.T = int64(t)*1024*1024 + user.SubscribeInfo.T
+	//随机天数
+	day := encrypt_plugin.RandomNumber(int(global.Server.Subscribe.ClockInMinDay), int(global.Server.Subscribe.ClockInMaxDay))
+	*user.SubscribeInfo.ExpiredAt = user.SubscribeInfo.ExpiredAt.AddDate(0, 0, day)
+
 	err = SaveUser(user)
-	return t, err
+	return t, day, err
+
+}
+
+func GetUserTraffic(params *model.FieldParamsReq) (*model.UserTrafficLog, error) {
+	var userTraffic model.UserTrafficLog
+	var err error
+	_, dataSql := CommonSqlFindNoOrderByNoLimitSqlHandler(params)
+	dataSql = dataSql[strings.Index(dataSql, "WHERE ")+6:] //去掉`WHERE `
+	if dataSql == "" {
+		return nil, errors.New("invalid parameter")
+	}
+	//fmt.Println("dataSql:", dataSql)
+	if global.Config.SystemParams.DbType == "mysql" {
+		err = global.DB.Model(&model.UserTrafficLog{}).Where(dataSql).Select("user_id, any_value(user_name) AS user_name, SUM(u) AS u, SUM(d) AS d").Group("user_id").Find(&userTraffic).Error
+	} else {
+		err = global.DB.Model(&model.UserTrafficLog{}).Where(dataSql).Select("user_id, user_name, SUM(u) AS u, SUM(d) AS d").Group("user_id").Find(&userTraffic).Error
+	}
+
+	return &userTraffic, err
+}
+
+func GetAllUserTraffic(params *model.FieldParamsReq) (*model.CommonDataResp, error) {
+	//约定：params.FieldParamsList 数组前两项传时间，第三个开始传查询参数
+	var userTraffic []model.UserTrafficLog
+	var total int64
+	var err error
+	_, dataSql := CommonSqlFindNoOrderByNoLimitSqlHandler(params)
+	dataSql = dataSql[strings.Index(dataSql, "WHERE ")+6:] //去掉`WHERE `
+	if dataSql == "" {
+		return nil, errors.New("invalid parameter")
+	}
+	//fmt.Println("dataSql:", dataSql)
+
+	if global.Config.SystemParams.DbType == "mysql" { //mysql only_full_group_by 问题
+		err = global.DB.Model(&model.UserTrafficLog{}).Where(dataSql).Select("user_id, any_value(user_name) AS user_name, SUM(u) u, SUM(d) AS d").Group("user_id").Count(&total).Order(params.Pagination.OrderBy).Limit(int(params.Pagination.PageSize)).Offset((int(params.Pagination.PageNum) - 1) * int(params.Pagination.PageSize)).Find(&userTraffic).Error
+	} else {
+		err = global.DB.Model(&model.UserTrafficLog{}).Where(dataSql).Select("user_id, user_name, SUM(u) u, SUM(d) AS d").Group("user_id").Count(&total).Order(params.Pagination.OrderBy).Limit(int(params.Pagination.PageSize)).Offset((int(params.Pagination.PageNum) - 1) * int(params.Pagination.PageSize)).Find(&userTraffic).Error
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return &model.CommonDataResp{
+		Total: total,
+		Data:  userTraffic,
+	}, nil
+}
+
+// 临时代码，删除用户流量统计
+func DeleteUserTrafficTemp() error {
+	return global.DB.Where("id > 0").Delete(&model.UserTrafficLog{}).Error
 
 }

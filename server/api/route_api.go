@@ -1,19 +1,26 @@
 package api
 
 import (
-	"AirGo/global"
-	"AirGo/model"
-	"AirGo/service"
-	"AirGo/utils/other_plugin"
-	"AirGo/utils/response"
+	"fmt"
+	"github.com/ppoonk/AirGo/global"
+	"github.com/ppoonk/AirGo/model"
+	"github.com/ppoonk/AirGo/service"
+	"github.com/ppoonk/AirGo/utils/response"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-// 获取角色动态路由
+// 获取用户动态路由
 func GetRouteList(ctx *gin.Context) {
-	uIdInt, _ := other_plugin.GetUserIDFromGinContext(ctx)
+	uIdInt, _ := GetUserIDFromGinContext(ctx)
+	//查cache
+	userRouteList, ok := global.LocalCache.Get(fmt.Sprintf("%d%s", uIdInt, global.UserRouteList))
+	if ok {
+		response.OK("GetRouteList success", userRouteList, ctx)
+		return
+	}
 	//查询uId对应的角色
 	roleIds, err := service.FindRoleIdsByuId(uIdInt)
 	if err != nil {
@@ -35,13 +42,21 @@ func GetRouteList(ctx *gin.Context) {
 		response.Fail("GetRouteSliceByRouteIds error:"+err.Error(), nil, ctx)
 		return
 	}
-	// 获取角色动态路由
 	route := service.GetDynamicRoute(routeSlice)
+	global.GoroutinePool.Submit(func() {
+		global.LocalCache.Set(fmt.Sprintf("%d%s", uIdInt, global.UserRouteList), *route, 5*time.Minute)
+	})
 	response.OK("GetRouteList success", route, ctx)
 }
 
-// 获取全部角色动态路由
+// 获取全部动态路由
 func GetAllRouteList(ctx *gin.Context) {
+	//查cache
+	allRouteList, ok := global.LocalCache.Get(global.AllRouteList)
+	if ok {
+		response.OK("GetRouteList success", allRouteList, ctx)
+		return
+	}
 	// 根据route Ids 查 route Slice
 	routeSlice, err := service.GetRouteSliceByRouteIds(nil)
 	if err != nil {
@@ -49,8 +64,10 @@ func GetAllRouteList(ctx *gin.Context) {
 		response.Fail("GetRouteSliceByRouteIds error:"+err.Error(), nil, ctx)
 		return
 	}
-	// 获取角色动态路由
 	route := service.GetDynamicRoute(routeSlice)
+	global.GoroutinePool.Submit(func() {
+		global.LocalCache.Set(global.AllRouteList, *route, 5*time.Minute)
+	})
 	response.OK("GetAllRouteList success", route, ctx)
 
 }
@@ -72,7 +89,7 @@ func GetRouteTree(ctx *gin.Context) {
 	roleId, _ := strconv.ParseInt(ctx.Query("roleId"), 10, 64)
 	// 角色Ids对应的route Ids
 	var roleIds = []int64{roleId}
-	routeIds, err := service.GetRouteIdsByRoleIds(roleIds) //空
+	routeIds, err := service.GetRouteIdsByRoleIds(roleIds)
 	if err != nil {
 		global.Logrus.Error(err)
 		response.Fail("GetRouteIdsByRoleIds error:"+err.Error(), nil, ctx)

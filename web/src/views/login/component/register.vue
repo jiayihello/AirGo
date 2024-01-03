@@ -10,13 +10,12 @@
         </template>
         <template #append>
           <el-select v-model="registerData.email_suffix" style="width: 130px;">
-            <el-option label="@qq.com" value="@qq.com"/>
-            <el-option label="@gmail.com" value="@gmail.com"/>
-            <el-option label="@163.com" value="@163.com"/>
-            <el-option label="@126.com" value="@126.com"/>
-            <el-option label="@outlook.com" value="@outlook.com"/>
-            <el-option label="@hotmail.com" value="@hotmail.com"/>
-            <el-option label="@foxmail.com" value="@foxmail.com"/>
+            <el-option
+                v-for="item in acceptable_email_suffixes_arr"
+                :key="item"
+                :label="item"
+                :value="item"
+            />
           </el-select>
         </template>
       </el-input>
@@ -91,15 +90,10 @@ import type {FormInstance, FormRules} from 'element-plus'
 import {ElMessage} from 'element-plus';
 import {useUserStore} from "/@/stores/userStore";
 import {storeToRefs} from 'pinia';
-
 import {useRouter} from 'vue-router';
-
 import {useThemeConfig} from '/@/stores/themeConfig';
-
 import {useServerStore} from "/@/stores/serverStore";
-
 import {usePublicStore} from "/@/stores/publicStore";
-
 import {Local} from "/@/utils/storage";
 import {request} from "/@/utils/request";
 import {useApiStore} from "/@/stores/apiStore";
@@ -110,12 +104,11 @@ const router = useRouter();
 const storesThemeConfig = useThemeConfig();
 const {themeConfig} = storeToRefs(storesThemeConfig);
 const serverStore = useServerStore()
-const {publicServerConfig} = storeToRefs(serverStore)
+const {publicServerConfig,acceptable_email_suffixes_arr} = storeToRefs(serverStore)
 const publicStore = usePublicStore()
-
 const apiStore = useApiStore()
 const apiStoreData = storeToRefs(apiStore)
-
+const emit = defineEmits(['toLogin'])
 
 //定义参数
 const state = reactive({
@@ -132,13 +125,11 @@ const onRegister = () => {
   userStore.register().then((res) => {
     ElMessage.success('注册成功，前往登录...')
     Local.clear() //删除缓存（包含邀请码数据）
-    setTimeout(() => {
-      window.location.href = '/'; // 去登录页
-      //router.push('/'); // 去登录页
-    }, 500)
-
+    userStore.$reset()
+    emit('toLogin')
+    refreshCaptcha() //刷新base64验证码，方便再次注册
   }).catch(() => {
-    refreshCaptcha()
+    refreshCaptcha() //注册失败，刷新base64验证码，停留在当前页面
   })
 }
 //获取邮件验证码
@@ -146,7 +137,7 @@ const onGetEmailCode = () => {
   if (registerData.value.user_name === '') {
     return
   }
-  request(apiStoreData.staticApi.value.public_getEmailCode, userStore.registerData).then((res) => {
+  userStore.sendEmailCode(registerData.value.user_name+registerData.value.email_suffix).then((res)=>{
     state.isCountDown = true
     ElMessage.success(res.msg)
     handleTimeChange()
@@ -186,7 +177,6 @@ const submitForm = async (formEl: FormInstance | undefined) => {
   if (!formEl) return
   await formEl.validate((valid, fields) => {
     if (valid) {
-      console.log('submit!')
       onRegister()
     } else {
       console.log('error submit!', fields)

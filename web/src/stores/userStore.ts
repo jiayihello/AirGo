@@ -1,11 +1,11 @@
 import {defineStore, storeToRefs} from 'pinia';
 //import Cookies from 'js-cookie';
 import {Local, Session} from '/@/utils/storage';
-import {ElMessage} from "element-plus";
 import {useServerStore} from "/@/stores/serverStore";
 import {usePublicStore} from "/@/stores/publicStore";
 import {request} from "/@/utils/request";
 import {useApiStore} from "/@/stores/apiStore";
+
 export const useUserStore = defineStore('userInfo', {
     state: () => ({
         //登录页面数据
@@ -54,8 +54,11 @@ export const useUserStore = defineStore('userInfo', {
                 t: 0,
                 u: 0,
                 d: 0,
-            }
+                reset_day: 0,
+            },
         } as SysUser,
+        //在线设备数提示信息
+        onlineDeviceInfo: '',
         //用户管理页面数据
         userManageData: {
             users: {
@@ -81,6 +84,7 @@ export const useUserStore = defineStore('userInfo', {
                         d: 0,
                         node_speedlimit: 0,
                         node_connector: 3,
+                        reset_day: 0,
                     }
                 } as SysUser,
                 check_list: ['普通用户'], //选中的角色
@@ -88,9 +92,23 @@ export const useUserStore = defineStore('userInfo', {
         },
     }),
     getters: {
-        used: (state): number => {
+        //使用流量，GB
+        usedTraffic: (state): number => {
+            return +((state.userInfos.subscribe_info.u + state.userInfos.subscribe_info.d) / 1024 / 1024 / 1024).toFixed(2)
+        },
+        //剩余流量，GB
+        residualTraffic: (state): number => {
             return +((state.userInfos.subscribe_info.t - state.userInfos.subscribe_info.u - state.userInfos.subscribe_info.d) / 1024 / 1024 / 1024).toFixed(2)
         },
+        //总流量，GB
+        totalTraffic: (state): number => {
+            return +(state.userInfos.subscribe_info.t / 1024 / 1024 / 1024).toFixed(2)
+        },
+        //剩余流量百分比，如：34.56  78.90
+        residualTrafficPercent: (state): number => {
+            return +(((state.userInfos.subscribe_info.t - state.userInfos.subscribe_info.d - state.userInfos.subscribe_info.u) / state.userInfos.subscribe_info.t) * 100).toFixed(2)
+        },
+        //订阅过期时间
         expired: (state): string => {
             if (state.userInfos.subscribe_info.expired_at === null) {
                 return ""
@@ -98,15 +116,14 @@ export const useUserStore = defineStore('userInfo', {
                 return state.userInfos.subscribe_info.expired_at.slice(0, 10)
             }
         },
-        //订阅
+        //订阅链接
         subUrl: (state): string => {
             const serverStore = useServerStore()
             const serverStoreData = storeToRefs(serverStore)
             const apiStore = useApiStore()
             const apiStoreData = storeToRefs(apiStore)
-            return serverStoreData.publicServerConfig.value.backend_url + apiStoreData.staticApi.value.user_getSub.path +"?link=" +state.userInfos.subscribe_info.subscribe_url
+            return serverStoreData.publicServerConfig.value.backend_url + apiStoreData.staticApi.value.user_getSub.path + "?link=" + state.userInfos.subscribe_info.subscribe_url
         },
-
     },
     actions: {
         // 重置数据
@@ -128,6 +145,7 @@ export const useUserStore = defineStore('userInfo', {
                     d: 0,
                     node_speedlimit: 0,
                     node_connector: 3,
+                    reset_day: 0,
                 }
             } as SysUser
             this.userManageData.dialog.check_list = ['普通用户']
@@ -136,7 +154,7 @@ export const useUserStore = defineStore('userInfo', {
         //注册
         async register(form?: object) {
             const referrerCode: string = Local.get('invitation')
-            if (referrerCode.length === 8) {
+            if (referrerCode !== null) {
                 this.registerData.referrer_code = referrerCode
             }
             const publicStore = usePublicStore()
@@ -173,7 +191,8 @@ export const useUserStore = defineStore('userInfo', {
         async getUserList(data?: object) {
             const apiStore = useApiStore()
             const res = await request(apiStore.api.user_getUserList, data)
-            this.userManageData.users = res.data
+            this.userManageData.users.user_list = res.data.data
+            this.userManageData.users.total = res.data.total
         },
         //新建用户
         async newUser(data?: object) {
@@ -199,6 +218,11 @@ export const useUserStore = defineStore('userInfo', {
         async submitResetPassword() {
             const apiStore = useApiStore()
             return await request(apiStore.staticApi.user_resetUserPassword, this.loginData)
-        }
+        },
+        //发送验证码
+        async sendEmailCode(email: string) {
+            const apiStore = useApiStore()
+            return await request(apiStore.staticApi.public_getEmailCode, {user_name: email})
+        },
     },
 });

@@ -1,24 +1,22 @@
 package api
 
 import (
-	"AirGo/global"
-	"AirGo/model"
-	"AirGo/service"
-	"AirGo/utils/encrypt_plugin"
-	"AirGo/utils/isp_plugin"
-	"AirGo/utils/jwt_plugin"
-	"AirGo/utils/other_plugin"
-	"AirGo/utils/response"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/ppoonk/AirGo/global"
+	"github.com/ppoonk/AirGo/model"
+	"github.com/ppoonk/AirGo/service"
+	"github.com/ppoonk/AirGo/utils/encrypt_plugin"
+	"github.com/ppoonk/AirGo/utils/isp_plugin"
+	"github.com/ppoonk/AirGo/utils/jwt_plugin"
+	"github.com/ppoonk/AirGo/utils/response"
 	"gorm.io/gorm"
-	"log"
 )
 
 // 获取监控
 func GetMonitorByUserID(ctx *gin.Context) {
-	uIDInt, ok := other_plugin.GetUserIDFromGinContext(ctx)
+	uIDInt, ok := GetUserIDFromGinContext(ctx)
 	if !ok {
 		response.Fail("GetMonitorByUserID error:user id error", nil, ctx)
 		return
@@ -36,7 +34,8 @@ func GetMonitorByUserID(ctx *gin.Context) {
 			},
 		}
 		service.CommonSqlCreate[model.ISP](ispNew)
-		isp, _, _ = service.CommonSqlFind[model.ISP, string, model.ISP]("user_id = " + fmt.Sprintf("%d", uIDInt))
+
+		isp, _, _ = service.CommonSqlFind[model.ISP, string, model.ISP](fmt.Sprintf("user_id = %d", uIDInt))
 	}
 	response.OK("GetMonitorByUserID success", isp, ctx)
 
@@ -104,7 +103,7 @@ func SendCode(ctx *gin.Context) {
 
 // 登录运营商
 func ISPLogin(ctx *gin.Context) {
-	uIDInt, ok := other_plugin.GetUserIDFromGinContext(ctx)
+	uIDInt, ok := GetUserIDFromGinContext(ctx)
 	if !ok {
 		response.Fail("ISPLogin error:user id error", nil, ctx)
 		return
@@ -119,7 +118,7 @@ func ISPLogin(ctx *gin.Context) {
 	}
 	if isp.ISPType == "loginAgain" {
 		//清空手机号信息，重新登录
-		isp1, _, _ := service.CommonSqlFind[model.ISP, string, model.ISP]("user_id = " + fmt.Sprintf("%d", uIDInt))
+		isp1, _, _ := service.CommonSqlFind[model.ISP, string, model.ISP](fmt.Sprintf("user_id = %d", uIDInt))
 		isp1.UnicomConfig.Cookie = ""
 		isp1.UnicomConfig.Password = ""
 		isp1.UnicomConfig.UnicomMobile = ""
@@ -193,16 +192,15 @@ func ISPLogin(ctx *gin.Context) {
 // 套餐查询
 func QueryPackage(ctx *gin.Context) {
 	token := ctx.Query("id")
-	claims, err := jwt_plugin.ParseTokenHs256(token, global.Server.JWT.SigningKey)
+	claims, err := jwt_plugin.ParseTokenHs256(token, global.Server.Security.JWT.SigningKey)
 	if err != nil {
 		response.Fail(err.Error(), nil, ctx)
 		return
 	}
-	log.Println("token解析后 claims.ID：", claims.UserID)
 	//设置user id
 	uID := claims.UserID
 	//查询monitor
-	isp, _, err := service.CommonSqlFind[model.ISP, string, model.ISP]("user_id = " + fmt.Sprintf("%d", uID))
+	isp, _, err := service.CommonSqlFind[model.ISP, string, model.ISP](fmt.Sprintf("user_id = %d", uID))
 	if err != nil {
 		ctx.JSON(200, gin.H{
 			"packageName": "查询流量失败，请重新登录",

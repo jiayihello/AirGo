@@ -28,6 +28,8 @@ export const useApiStore = defineStore("apiStore", {
             user_changeUserPassword: {path: apiPre + "/user/changeUserPassword", method: "post"} as ApiItem,
             user_resetSub: {path: apiPre + "/user/resetSub", method: "get"} as ApiItem,
             user_clockin: {path: apiPre + "/user/clockin", method: "get"} as ApiItem,
+            user_getUserTraffic: {path: apiPre + "/user/getUserTraffic", method: "post"} as ApiItem,
+            user_getAllUserTraffic: {path: apiPre + "/user/getAllUserTraffic", method: "post"} as ApiItem,
 
             user_getUserList: {path: apiPre + "/user/getUserList", method: "post"} as ApiItem,
             user_newUser: {path: apiPre + "/user/newUser", method: "post"} as ApiItem,
@@ -50,10 +52,9 @@ export const useApiStore = defineStore("apiStore", {
             role_addRole: {path: apiPre + "/role/addRole", method: "post"} as ApiItem,
             role_delRole: {path: apiPre + "/role/delRole", method: "post"} as ApiItem,
             //系统设置
-            system_updateThemeConfig: {path: apiPre + "/system/updateThemeConfig", method: "post"} as ApiItem,
-            system_getSetting: {path: apiPre + "/system/getSetting", method: "get"} as ApiItem,
-            system_updateSetting: {path: apiPre + "/system/updateSetting", method: "post"} as ApiItem,
-            system_createx25519: {path: apiPre + "/system/createx25519", method: "get"} as ApiItem,
+            server_updateThemeConfig: {path: apiPre + "/server/updateThemeConfig", method: "post"} as ApiItem,
+            server_getSetting: {path: apiPre + "/server/getSetting", method: "get"} as ApiItem,
+            server_updateSetting: {path: apiPre + "/server/updateSetting", method: "post"} as ApiItem,
 
             //节点
             node_getAllNode: {path: apiPre + "/node/getAllNode", method: "get"} as ApiItem,
@@ -62,6 +63,7 @@ export const useApiStore = defineStore("apiStore", {
             node_updateNode: {path: apiPre + "/node/updateNode", method: "post"} as ApiItem,
             node_getTraffic: {path: apiPre + "/node/getTraffic", method: "post"} as ApiItem,
             node_nodeSort: {path: apiPre + "/node/nodeSort", method: "post"} as ApiItem,
+            node_createx25519: {path: apiPre + "/node/createx25519", method: "get"} as ApiItem,
             node_newNodeShared: {path: apiPre + "/node/newNodeShared", method: "post"} as ApiItem,
             node_getNodeSharedList: {path: apiPre + "/node/getNodeSharedList", method: "get"} as ApiItem,
             node_deleteNodeShared: {path: apiPre + "/node/deleteNodeShared", method: "post"} as ApiItem,
@@ -82,6 +84,7 @@ export const useApiStore = defineStore("apiStore", {
             order_getAllOrder: {path: apiPre + "/order/getAllOrder", method: "post"} as ApiItem,
             order_completedOrder: {path: apiPre + "/order/completedOrder", method: "post"} as ApiItem,
             order_getMonthOrderStatistics: {path: apiPre + "/order/getMonthOrderStatistics", method: "post"} as ApiItem,
+            order_updateUserOrder: {path: apiPre + "/order/updateUserOrder", method: "post"} as ApiItem,
 
             //pay
             pay_getEnabledPayList: {path: apiPre + "/pay/getEnabledPayList", method: "get"} as ApiItem,
@@ -104,7 +107,6 @@ export const useApiStore = defineStore("apiStore", {
             upload_getPictureList: {path: apiPre + "/upload/getPictureList", method: "post"} as ApiItem,
 
             //report
-            report_getDB: {path: apiPre + "/report/getDB", method: "get"} as ApiItem,
             report_getTables: {path: apiPre + "/report/getTables", method: "post"} as ApiItem,
             report_getColumn: {path: apiPre + "/report/getColumn", method: "post"} as ApiItem,
             report_reportSubmit: {path: apiPre + "/report/reportSubmit", method: "post"} as ApiItem,
@@ -131,7 +133,17 @@ export const useApiStore = defineStore("apiStore", {
             access_updateRoutes: {path: apiPre + "/access/updateRoutes", method: "post"} as ApiItem,
             access_deleteRoutes: {path: apiPre + "/access/deleteRoutes", method: "post"} as ApiItem,
             access_getRoutesList: {path: apiPre + "/access/getRoutesList", method: "post"} as ApiItem,
-
+            //migration
+            migration_fromOther:{path: apiPre + "/migration/fromOther", method: "post"} as ApiItem,
+            //ticket
+            ticket_newTicket:{path: apiPre + "/ticket/newTicket", method: "post"} as ApiItem,
+            ticket_deleteTicket:{path: apiPre + "/ticket/deleteTicket", method: "post"} as ApiItem,
+            ticket_updateTicket:{path: apiPre + "/ticket/updateTicket", method: "post"} as ApiItem,
+            ticket_updateUserTicket:{path: apiPre + "/ticket/updateUserTicket", method: "post"} as ApiItem,
+            ticket_getUserTicketList:{path: apiPre + "/ticket/getUserTicketList", method: "post"} as ApiItem,
+            ticket_getTicketList:{path: apiPre + "/ticket/getTicketList", method: "post"} as ApiItem,
+            ticket_sendTicketMessage:{path: apiPre + "/ticket/sendTicketMessage", method: "post"} as ApiItem,
+            ticket_getTicketMessage:{path: apiPre + "/ticket/getTicketMessage", method: "post"} as ApiItem,
         },
 
     }),

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"sync"
 	"time"
 
 	uuid "github.com/satori/go.uuid"
@@ -23,13 +24,16 @@ type User struct {
 	Enable         bool      `json:"enable"       gorm:"default:true;comment:用户是否被启用 true正常 false冻结"`
 	InvitationCode string    `json:"invitation_code" gorm:"comment:我的邀请码"`
 	ReferrerCode   string    `json:"referrer_code"   gorm:"comment:推荐人码"`
-	Remain         float64   `json:"remain"          gorm:"comment:余额"`
+	Remain         float64   `json:"remain"          gorm:"default:0;comment:余额"`
+	TgID           int64     `json:"tg_id"           gorm:"comment:tg id"`
 	//角色组
 	RoleGroup []Role `json:"role_group" gorm:"many2many:user_and_role;"` //多对多
 	//订单
 	Orders []Orders `json:"orders" gorm:"foreignKey:UserID;references:ID"` //has many
-	//附加订阅信息
+	//订阅信息
 	SubscribeInfo SubscribeInfo `json:"subscribe_info" gorm:"embedded;comment:附加订阅信息"`
+	//该用户当前在线信息
+	OnlineUserInfo OnlineUserInfo `json:"online_user_info" gorm:"-"`
 }
 
 // 附加订阅信息
@@ -85,8 +89,17 @@ type UserChangePassword struct {
 	EmailCode  string `json:"email_code"`
 }
 
-// users with total
-type UsersWithTotal struct {
-	Total    int64  `json:"total"`
-	UserList []User `json:"user_list"`
+// 用户在线设备信息
+type OnlineUserInfo struct {
+	NodeConnector int64                    `json:"node_connector"` //连接客户端数
+	NodeIPMap     map[int64]OnlineNodeInfo `json:"node_ip_map"`
+}
+
+type OnlineUserItem struct {
+	NodeConnector int64     `json:"node_connector"` //连接客户端数
+	NodeIPMap     *sync.Map `json:"node_ip_map"`    //key: nodeID int64   value: OnlineNodeInfo
+}
+type OnlineNodeInfo struct {
+	NodeIP         []string  `json:"node_ip"`
+	LastUpdateTime time.Time `json:"last_update_time"`
 }
